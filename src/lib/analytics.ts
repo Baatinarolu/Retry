@@ -8,6 +8,7 @@ import {
 } from "./calculations";
 import { zonedDayKey, zonedMonthKey, zonedWeekday } from "./reporting";
 import { buildOutlierDependence } from "./outlier-analysis";
+import { buildBehaviorSequences } from "./behavior-sequences";
 
 export type TradeRow = ClosedTradeStatsInput & {
   id: string;
@@ -220,10 +221,12 @@ export function buildAnalytics(trades: TradeRow[], startingBalance: string, time
   const worst = [...trades].sort((a, b) => Number(a.netPnl) - Number(b.netPnl)).slice(0, 5);
   const insights = buildInsights(trades, stats);
   const outliers = buildOutlierDependence(trades, startingBalance);
+  const behaviorSequences = buildBehaviorSequences(trades, startingBalance);
 
   return {
     stats,
     outliers,
+    behaviorSequences,
     equity,
     daily,
     byInstrument,

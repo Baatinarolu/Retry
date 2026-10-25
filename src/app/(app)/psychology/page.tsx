@@ -65,6 +65,28 @@ export default function PsychologyPage() {
           ))}
         </ul>
       </Card>
+      <Card>
+        <div className="card-heading"><div><p className="eyebrow mb-2">Sequences, not causes</p><h2>What happens next?</h2></div><span>Realization order</span></div>
+        {a.behaviorSequences.length === 0 ? <p className="text-sm text-[var(--muted)]">Record at least two closed trades to compare next-trade sequences.</p> : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr><th>Previous trade</th><th>n</th><th>Next avg P&amp;L</th><th>Next avg R</th><th>Other avg R</th></tr></thead>
+              <tbody>
+                {a.behaviorSequences.map((sequence: any) => (
+                  <tr key={sequence.key}>
+                    <td>{sequence.label}{sequence.sampleWarning ? " *" : ""}</td>
+                    <td>{sequence.sampleSize}</td>
+                    <td className={pnlClass(sequence.averagePnl)}>{formatMoney(sequence.averagePnl, ws.currency)}</td>
+                    <td>{sequence.averageR ?? "—"}</td>
+                    <td>{sequence.comparison?.averageR ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-3 text-xs leading-5 text-[var(--muted)]">Each row examines the next closed trade after the tagged event; Other avg R is the complementary next-trade sample. * Fewer than 20 observations. Realization order can overlap when positions run concurrently; these are correlations, not causal findings.</p>
+      </Card>
       <Banner>
         After a losing streak, review size and rules before the next click. Revenge size and martingale are never part of this coach.
       </Banner>
