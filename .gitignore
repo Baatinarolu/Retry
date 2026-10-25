@@ -8,8 +8,7 @@ coverage/
 # Local runtime data and private uploads
 data/
 
-# Environment files (never commit secrets)
-.env
+# Environment variants (the root .env is intentionally tracked)
 .env.*
 !.env.example
 

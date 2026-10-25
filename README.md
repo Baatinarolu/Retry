@@ -142,7 +142,7 @@ A ready-to-use workflow template is included at `docs/db-migrate.yml`. It runs o
 - **Rate limits:** the built-in limiter is process-local. Use a shared Redis/database limiter at the edge when running multiple instances.
 - **Demo mode:** the demo is a shared sample workspace. Its UI warns users not to enter private data; isolate or make it read-only for a public deployment.
 - **Reporting:** use an account filter when accounts have different currencies. Automatic FX conversion and user-timezone period boundaries remain separate feature work; current cross-account totals are raw numeric sums and period boundaries are UTC.
-- **Secrets:** never commit `.env`, database credentials, reset tokens, or uploaded private charts.
+- **Environment:** The project owner has chosen to track `.env` in this repository. Everyone with repository access can read and use the included database and session credentials.
 
 ## Security and dependency status
 
