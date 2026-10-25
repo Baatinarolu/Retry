@@ -88,7 +88,7 @@ npm test            # Calculation, CSV, golden-file, and validation tests
 TRADEMIND_TEST_DATABASE_URL=... npm run test:integration  # Opt-in real PostgreSQL checks
 ```
 
-The two committed import fixtures under `tests/fixtures/import/` pin canonical summary and execution preparation, including source hashes and scaled fills. The integration suite is skipped without `TRADEMIND_TEST_DATABASE_URL`; when enabled it applies every checked-in migration to a **dedicated disposable test database**, then verifies concurrent rate-limit atomicity and hashed keys. Never point it at production or the application's configured database. It is not a substitute for a production migration/restore drill.
+The two committed import fixtures under `tests/fixtures/import/` pin canonical summary and execution preparation, including source hashes and scaled fills. The integration suite is skipped without `TRADEMIND_TEST_DATABASE_URL`; when enabled it applies every checked-in migration to a **dedicated disposable test database**, verifies concurrent rate-limit atomicity and hashed keys, exercises the live mixed-currency reporting context, and performs an export/delete/restore cycle for accounts and FX rates. Never point it at production or the application's configured database. It is not a substitute for a production migration/restore drill.
 
 The build needs `DATABASE_URL` at module initialization. Use a real database URL in deployment; no database connection is needed for the purely unit-tested calculation modules.
 
