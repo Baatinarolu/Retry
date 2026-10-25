@@ -26,7 +26,7 @@ export function useWorkspace() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [instruments, setInstruments] = useState<{ symbol: string }[]>([]);
   const [strategies, setStrategies] = useState<{ id: string; name: string }[]>([]);
-  const [currency, setCurrency] = useState("USD");
+  const [baseCurrency, setBaseCurrency] = useState("USD");
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,7 +41,7 @@ export function useWorkspace() {
         setAccounts(boot.accounts || []);
         setInstruments(boot.instruments || []);
         setStrategies(strat.strategies || []);
-        setCurrency(boot.user?.baseCurrency || boot.accounts?.[0]?.currency || "USD");
+        setBaseCurrency(boot.user?.baseCurrency || "USD");
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
@@ -63,6 +63,14 @@ export function useWorkspace() {
       apiJson<any>(`/api/trades?page=${page}&limit=25&${qs}&${extra}`, { signal }),
     [qs],
   );
+
+  const selectedAccount = accounts.find((account) => account.id === filters.accountId);
+  const commonAccountCurrency = accounts.length > 0 && accounts.every(
+    (account) => account.currency.toUpperCase() === accounts[0].currency.toUpperCase(),
+  )
+    ? accounts[0].currency.toUpperCase()
+    : null;
+  const currency = selectedAccount?.currency.toUpperCase() ?? commonAccountCurrency ?? baseCurrency;
 
   return {
     accounts,

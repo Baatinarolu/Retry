@@ -191,7 +191,13 @@ export type ClosedTradeStatsInput = {
   holdingMinutes?: number | null;
   entryAt: Date;
   exitAt?: Date | null;
+  /** Final exit or latest partial reduction; legacy rows fall back to exit/entry. */
+  realizedAt?: Date | null;
 };
+
+export function realizationDate(trade: Pick<ClosedTradeStatsInput, "entryAt" | "exitAt" | "realizedAt">) {
+  return trade.realizedAt ?? trade.exitAt ?? trade.entryAt;
+}
 
 export type PerformanceStats = {
   totalTrades: number;
@@ -278,7 +284,7 @@ export function computePerformanceStats(
   const expectancyCurrency = n === 0 ? null : net.div(n).toFixed(4);
 
   const sorted = [...closed].sort(
-    (a, b) => (a.exitAt ?? a.entryAt).getTime() - (b.exitAt ?? b.entryAt).getTime(),
+    (a, b) => realizationDate(a).getTime() - realizationDate(b).getTime(),
   );
   let equity = d(startingBalance);
   let peak = equity;
@@ -376,12 +382,12 @@ export function equitySeries(
 ): { t: string; equity: number; pnl: number; cumulativePnl: number }[] {
   const sorted = trades
     .filter((t) => !t.status || t.status === "closed")
-    .sort((a, b) => (a.exitAt ?? a.entryAt).getTime() - (b.exitAt ?? b.entryAt).getTime());
+    .sort((a, b) => realizationDate(a).getTime() - realizationDate(b).getTime());
   let equity = d(startingBalance);
   let cum = new Decimal(0);
   const points: { t: string; equity: number; pnl: number; cumulativePnl: number }[] = [
     {
-      t: sorted[0] ? (sorted[0].exitAt ?? sorted[0].entryAt).toISOString() : new Date().toISOString(),
+      t: sorted[0] ? realizationDate(sorted[0]).toISOString() : new Date().toISOString(),
       equity: Number(equity.toFixed(2)),
       pnl: 0,
       cumulativePnl: 0,
@@ -394,7 +400,7 @@ export function equitySeries(
     equity = equity.plus(pnl);
     cum = cum.plus(pnl);
     points.push({
-      t: (trade.exitAt ?? trade.entryAt).toISOString(),
+      t: realizationDate(trade).toISOString(),
       equity: Number(equity.toFixed(2)),
       pnl: Number(pnl.toFixed(2)),
       cumulativePnl: Number(cum.toFixed(2)),

@@ -80,6 +80,7 @@ test("partially closed short trade retains open quantity and realized P&L", () =
   assert.equal(ledger.metrics.rMultiple, "1.0000");
   assert.equal(ledger.metrics.holdingMinutes, null);
   assert.equal(ledger.exitAt, null);
+  assert.equal(ledger.realizedAt?.toISOString(), at(11));
 });
 
 test("weighted-average cost remains correct across a partial exit and later scale-in", () => {

@@ -331,6 +331,7 @@ export async function seedDemoTrades(userId: string) {
         timezone: "UTC",
         entryAt,
         exitAt,
+        realizedAt: exitAt,
         entryPrice: spec.entry,
         exitPrice: spec.exit,
         stopLoss: spec.sl,

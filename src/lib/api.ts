@@ -8,16 +8,29 @@ import type { TradeFilters } from "./queries";
 export async function requireUser() {
   const session = await getSession();
   if (!session) {
-    return { session: null as null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return {
+      session: null as null,
+      user: null,
+      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
   }
   const [user] = await db
-    .select({ sessionVersion: users.sessionVersion })
+    .select({
+      sessionVersion: users.sessionVersion,
+      timezone: users.timezone,
+      baseCurrency: users.baseCurrency,
+      aiPermission: users.aiPermission,
+    })
     .from(users)
     .where(eq(users.id, session.uid));
   if (!user || user.sessionVersion !== session.ver) {
-    return { session: null as null, error: NextResponse.json({ error: "Session expired" }, { status: 401 }) };
+    return {
+      session: null as null,
+      user: null,
+      error: NextResponse.json({ error: "Session expired" }, { status: 401 }),
+    };
   }
-  return { session, error: null };
+  return { session, user, error: null };
 }
 
 export function jsonError(message: string, status = 400) {

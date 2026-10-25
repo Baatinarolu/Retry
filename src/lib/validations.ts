@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
+import { isValidTimeZone } from "./reporting";
 
 const isBlank = (value: unknown) => value === "" || value === null || value === undefined;
 
@@ -68,7 +69,7 @@ export const signupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().email().max(160),
   password: passwordSchema,
-  timezone: z.string().max(80).optional(),
+  timezone: z.string().max(80).refine(isValidTimeZone, "Invalid timezone").optional(),
   baseCurrency: z.string().regex(/^[A-Za-z]{3,8}$/).optional(),
 });
 
@@ -105,7 +106,7 @@ export const tradeSchema = z
     direction: z.enum(["long", "short"]),
     tradeType: z.string().max(32).optional().default("intraday"),
     session: z.string().max(40).optional().default("london"),
-    timezone: z.string().max(80).optional().default("UTC"),
+    timezone: z.string().max(80).refine(isValidTimeZone, "Invalid timezone").optional().default("UTC"),
     entryAt: dateTimeString,
     exitAt: optionalDateTimeString,
     entryPrice: optionalPositive,
@@ -290,7 +291,7 @@ export const riskCheckSchema = z.object({
 
 export const settingsSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
-  timezone: z.string().max(80).optional(),
+  timezone: z.string().max(80).refine(isValidTimeZone, "Invalid timezone").optional(),
   theme: z.enum(["dark", "light"]).optional(),
   dateFormat: z.string().max(40).optional(),
   timeFormat: z.string().max(40).optional(),

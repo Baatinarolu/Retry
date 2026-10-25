@@ -20,15 +20,7 @@ export default function AiCoachPage() {
     setLoading(true);
     setError("");
     try {
-      const now = new Date();
-      const body: { type: string; question: string; from?: string; to?: string } = { type, question };
-      if (type === "weekly" || type === "monthly") {
-        const from = new Date(now);
-        if (type === "weekly") from.setUTCDate(from.getUTCDate() - 6);
-        else from.setUTCDate(1);
-        body.from = from.toISOString().slice(0, 10);
-        body.to = now.toISOString().slice(0, 10);
-      }
+      const body = { type, question };
       const response = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

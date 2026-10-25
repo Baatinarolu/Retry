@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
   const url = new URL(req.url);
   const format = url.searchParams.get("format") || "csv";
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     .from(trades)
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .leftJoin(psychologyRecords, eq(psychologyRecords.tradeId, trades.id))
-    .where(tradeWhere(session!.uid, filters));
+    .where(tradeWhere(session!.uid, filters, user!.timezone));
 
   if (format === "json") {
     return NextResponse.json(
@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     "direction",
     "entry_at",
     "exit_at",
+    "realized_at",
     "entry_price",
     "exit_price",
     "stop_loss",
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
         trade.direction,
         trade.entryAt.toISOString(),
         trade.exitAt?.toISOString() ?? "",
+        trade.realizedAt?.toISOString() ?? "",
         trade.entryPrice,
         trade.exitPrice ?? "",
         trade.stopLoss ?? "",

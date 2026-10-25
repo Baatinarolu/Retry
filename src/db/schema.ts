@@ -180,6 +180,8 @@ export const trades = pgTable(
     timezone: text("timezone").notNull().default("UTC"),
     entryAt: timestamp("entry_at", { withTimezone: true }).notNull(),
     exitAt: timestamp("exit_at", { withTimezone: true }),
+    /** Latest realization instant: final exit, or latest partial reduction. */
+    realizedAt: timestamp("realized_at", { withTimezone: true }),
     entryPrice: numeric("entry_price", { precision: 18, scale: 8 }).notNull(),
     exitPrice: numeric("exit_price", { precision: 18, scale: 8 }),
     stopLoss: numeric("stop_loss", { precision: 18, scale: 8 }),
@@ -227,6 +229,7 @@ export const trades = pgTable(
   (t) => [
     index("trades_user_idx").on(t.userId),
     index("trades_user_entry_idx").on(t.userId, t.entryAt),
+    index("trades_user_realized_idx").on(t.userId, t.realizedAt),
     index("trades_account_idx").on(t.accountId),
     index("trades_instrument_idx").on(t.userId, t.instrument),
     uniqueIndex("trades_user_display_idx").on(t.userId, t.displayId),

@@ -180,6 +180,7 @@ function calculate(payload: TradePayload) {
       executionBased: true,
       entryAt: ledger.entryAt,
       exitAt: ledger.exitAt,
+      realizedAt: ledger.realizedAt,
       metrics: ledger.metrics,
       ledger,
     };
@@ -216,14 +217,14 @@ function calculate(payload: TradePayload) {
     entryAt,
     exitAt,
   });
-  return { closed, executionBased: false, entryAt, exitAt, metrics, ledger: null };
+  return { closed, executionBased: false, entryAt, exitAt, realizedAt: closed ? exitAt : null, metrics, ledger: null };
 }
 
 function valuesFor(
   payload: TradePayload,
   calculated: ReturnType<typeof calculate>,
 ): Omit<typeof trades.$inferInsert, "userId" | "accountId" | "displayId" | "balanceBefore" | "balanceAfter"> {
-  const { closed, entryAt, exitAt, metrics, ledger, executionBased } = calculated;
+  const { closed, entryAt, exitAt, realizedAt, metrics, ledger, executionBased } = calculated;
   return {
     strategyId: payload.strategyId || null,
     instrument: payload.instrument.trim(),
@@ -234,6 +235,7 @@ function valuesFor(
     timezone: payload.timezone || "UTC",
     entryAt,
     exitAt,
+    realizedAt,
     entryPrice: ledger?.entryPrice ?? str0(payload.entryPrice),
     exitPrice: ledger ? ledger.exitPrice : closed ? str(payload.exitPrice) : null,
     stopLoss: str(payload.stopLoss),
@@ -334,6 +336,7 @@ export async function rebuildAccountBalances(tx: Tx, accountId: string) {
       netPnl: trades.netPnl,
       entryAt: trades.entryAt,
       exitAt: trades.exitAt,
+      realizedAt: trades.realizedAt,
       createdAt: trades.createdAt,
       balanceBefore: trades.balanceBefore,
       balanceAfter: trades.balanceAfter,
@@ -341,22 +344,7 @@ export async function rebuildAccountBalances(tx: Tx, accountId: string) {
     .from(trades)
     .where(eq(trades.accountId, accountId));
 
-  // An open position has no final exitAt, but a scale-out still realizes P&L.
-  // Order its position-level snapshot at the latest reduction, not its entry.
-  const reductions = rows.length
-    ? await tx
-        .select({ tradeId: tradeExecutions.tradeId, executedAt: tradeExecutions.executedAt })
-        .from(tradeExecutions)
-        .innerJoin(trades, eq(trades.id, tradeExecutions.tradeId))
-        .where(and(eq(trades.accountId, accountId), inArray(tradeExecutions.type, ["scale_out", "exit"])))
-    : [];
-  const latestReduction = new Map<string, Date>();
-  for (const reduction of reductions) {
-    const existing = latestReduction.get(reduction.tradeId);
-    if (!existing || reduction.executedAt > existing) latestReduction.set(reduction.tradeId, reduction.executedAt);
-  }
-  const ledgerRows = rows.map((row) => ({ ...row, realizedAt: latestReduction.get(row.id) ?? null }));
-  const { snapshots, currentBalance } = buildAccountBalanceSnapshots(account.startingBalance, ledgerRows);
+  const { snapshots, currentBalance } = buildAccountBalanceSnapshots(account.startingBalance, rows);
   const byId = new Map(rows.map((row) => [row.id, row]));
 
   for (const snapshot of snapshots) {

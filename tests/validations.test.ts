@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { journalSchema, riskSchema, signupSchema, tradeSchema } from "../src/lib/validations";
+import { journalSchema, riskSchema, settingsSchema, signupSchema, tradeSchema } from "../src/lib/validations";
 
 const validTrade = {
   accountId: "123e4567-e89b-42d3-a456-426614174000",
@@ -64,6 +64,8 @@ test("calendar dates and zero-valued risk limits validate correctly", () => {
   assert.equal(journalSchema.safeParse({ journalDate: "2026-02-28" }).success, true);
   const risk = riskSchema.safeParse({ maxDailyLoss: 0, maxTradesPerDay: 0, maxConsecutiveLosses: 0 });
   assert.equal(risk.success, true);
+  assert.equal(settingsSchema.safeParse({ timezone: "America/New_York" }).success, true);
+  assert.equal(settingsSchema.safeParse({ timezone: "not/a-timezone" }).success, false);
 });
 
 test("passwords cannot exceed bcrypt's 72-byte input boundary", () => {

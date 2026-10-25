@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
   const url = new URL(req.url);
   const filters = parseFilters(url);
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         ilike(strategies.name, `%${q}%`),
       )
     : undefined;
-  const where = and(tradeWhere(session!.uid, filters), search);
+  const where = and(tradeWhere(session!.uid, filters, user!.timezone), search);
 
   const [countRow] = await db
     .select({ total: sql<number>`count(*)` })

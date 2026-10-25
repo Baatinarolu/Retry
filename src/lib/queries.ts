@@ -6,8 +6,10 @@ import {
   trades,
   tradingAccounts,
 } from "@/db/schema";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import Decimal from "decimal.js";
 import type { TradeRow } from "./analytics";
+import { calendarDayBounds, commonReportingCurrency, isCalendarDate } from "./reporting";
 
 export type TradeFilters = {
   from?: string | null;
@@ -20,7 +22,7 @@ export type TradeFilters = {
   dateField?: "entry" | "exit" | null;
 };
 
-export function tradeWhere(userId: string, filters: TradeFilters = {}) {
+export function tradeWhere(userId: string, filters: TradeFilters = {}, timeZone = "UTC") {
   const parts = [eq(trades.userId, userId)];
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   let invalid = false;
@@ -35,24 +37,29 @@ export function tradeWhere(userId: string, filters: TradeFilters = {}) {
   }
   if (filters.direction) parts.push(eq(trades.direction, filters.direction));
   if (filters.session) parts.push(eq(trades.session, filters.session));
-  const dateColumn = filters.dateField === "exit" ? trades.exitAt : trades.entryAt;
+  const dateColumn = filters.dateField === "exit" ? trades.realizedAt : trades.entryAt;
   if (filters.from) {
-    const start = new Date(filters.from);
-    if (Number.isNaN(start.getTime())) invalid = true;
-    else parts.push(gte(dateColumn, start));
+    if (isCalendarDate(filters.from)) {
+      parts.push(gte(dateColumn, calendarDayBounds(filters.from, timeZone).start));
+    } else {
+      const start = new Date(filters.from);
+      if (Number.isNaN(start.getTime()) || /^\d{4}-\d{2}-\d{2}$/.test(filters.from)) invalid = true;
+      else parts.push(gte(dateColumn, start));
+    }
   }
   if (filters.to) {
-    const end = new Date(filters.to);
-    if (Number.isNaN(end.getTime())) invalid = true;
-    else {
-      if (!filters.to.includes("T")) end.setUTCHours(23, 59, 59, 999);
-      parts.push(lte(dateColumn, end));
+    if (isCalendarDate(filters.to)) {
+      parts.push(lt(dateColumn, calendarDayBounds(filters.to, timeZone).end));
+    } else {
+      const end = new Date(filters.to);
+      if (Number.isNaN(end.getTime()) || /^\d{4}-\d{2}-\d{2}$/.test(filters.to)) invalid = true;
+      else parts.push(lte(dateColumn, end));
     }
   }
   return and(...parts, invalid ? sql`false` : undefined);
 }
 
-export async function loadTradeRows(userId: string, filters: TradeFilters = {}): Promise<TradeRow[]> {
+export async function loadTradeRows(userId: string, filters: TradeFilters = {}, timeZone = "UTC"): Promise<TradeRow[]> {
   const rows = await db
     .select({
       trade: trades,
@@ -62,7 +69,7 @@ export async function loadTradeRows(userId: string, filters: TradeFilters = {}):
     .from(trades)
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .leftJoin(psychologyRecords, eq(psychologyRecords.tradeId, trades.id))
-    .where(and(tradeWhere(userId, filters), eq(trades.status, "closed")))
+    .where(and(tradeWhere(userId, filters, timeZone), eq(trades.status, "closed")))
     .orderBy(desc(trades.entryAt));
 
   return rows.map((r) => ({
@@ -86,6 +93,7 @@ export async function loadTradeRows(userId: string, filters: TradeFilters = {}):
     holdingMinutes: r.trade.holdingMinutes,
     entryAt: r.trade.entryAt,
     exitAt: r.trade.exitAt,
+    realizedAt: r.trade.realizedAt,
     emotionBefore: r.psych?.emotionBefore,
     emotionAfter: r.psych?.emotionAfter,
     fomo: r.psych?.fomo,
@@ -113,11 +121,22 @@ export async function getUserTags(userId: string) {
   return db.select().from(tags).where(eq(tags.userId, userId)).orderBy(tags.name);
 }
 
+export async function reportingContextFor(userId: string, accountId?: string | null) {
+  const accounts = accountId
+    ? await db
+        .select()
+        .from(tradingAccounts)
+        .where(and(eq(tradingAccounts.id, accountId), eq(tradingAccounts.userId, userId)))
+    : await getUserAccounts(userId);
+  if (accountId && !accounts.length) throw new Error("Account not found");
+
+  const currency = commonReportingCurrency(accounts.map((account) => account.currency));
+  const startingBalance = accounts
+    .reduce((total, account) => total.plus(account.startingBalance), new Decimal(0))
+    .toFixed(2);
+  return { currency, startingBalance };
+}
+
 export async function startingBalanceFor(userId: string, accountId?: string | null) {
-  if (accountId) {
-    const [a] = await db.select().from(tradingAccounts).where(and(eq(tradingAccounts.id, accountId), eq(tradingAccounts.userId, userId)));
-    return a?.startingBalance ?? "0";
-  }
-  const list = await getUserAccounts(userId);
-  return list.reduce((s, a) => s + Number(a.startingBalance || 0), 0).toFixed(2);
+  return (await reportingContextFor(userId, accountId)).startingBalance;
 }

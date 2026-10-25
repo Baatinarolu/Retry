@@ -1,5 +1,12 @@
 import { MIN_SAMPLE_FOR_CONCLUSION } from "./constants";
-import { computePerformanceStats, equitySeries, type ClosedTradeStatsInput, type PerformanceStats } from "./calculations";
+import {
+  computePerformanceStats,
+  equitySeries,
+  realizationDate,
+  type ClosedTradeStatsInput,
+  type PerformanceStats,
+} from "./calculations";
+import { zonedDayKey, zonedMonthKey, zonedWeekday } from "./reporting";
 
 export type TradeRow = ClosedTradeStatsInput & {
   id: string;
@@ -49,12 +56,12 @@ function group(trades: TradeRow[], keyFn: (t: TradeRow) => string, startingBalan
     .sort((a, b) => Number(b.stats.netPnl) - Number(a.stats.netPnl));
 }
 
-export function weekdayName(d: Date) {
-  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.getUTCDay()];
+export function weekdayName(d: Date, timeZone = "UTC") {
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][zonedWeekday(d, timeZone)];
 }
 
-export function monthKey(d: Date) {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+export function monthKey(d: Date, timeZone = "UTC") {
+  return zonedMonthKey(d, timeZone);
 }
 
 export type Insight = {
@@ -125,7 +132,7 @@ export function buildInsights(trades: TradeRow[], stats: PerformanceStats): Insi
     });
   }
 
-  const sorted = [...trades].sort((a, b) => (a.exitAt ?? a.entryAt).getTime() - (b.exitAt ?? b.entryAt).getTime());
+  const sorted = [...trades].sort((a, b) => realizationDate(a).getTime() - realizationDate(b).getTime());
   let afterLoss = 0;
   let afterLossPnl = 0;
   let afterWin = 0;
@@ -154,7 +161,7 @@ export function buildInsights(trades: TradeRow[], stats: PerformanceStats): Insi
   return insights.slice(0, 8);
 }
 
-export function buildAnalytics(trades: TradeRow[], startingBalance: string) {
+export function buildAnalytics(trades: TradeRow[], startingBalance: string, timeZone = "UTC") {
   // Open trades have no realized outcome and must not dilute win rate, expectancy, or drawdown.
   trades = trades.filter((t) => !t.status || t.status === "closed");
   const stats = computePerformanceStats(trades, startingBalance);
@@ -163,8 +170,8 @@ export function buildAnalytics(trades: TradeRow[], startingBalance: string) {
   const byStrategy = group(trades, (t) => t.strategyName || "Unlinked", startingBalance);
   const bySession = group(trades, (t) => t.session, startingBalance);
   const byDirection = group(trades, (t) => t.direction, startingBalance);
-  const byWeekday = group(trades, (t) => weekdayName(t.exitAt ?? t.entryAt), startingBalance);
-  const byMonth = group(trades, (t) => monthKey(t.exitAt ?? t.entryAt), startingBalance);
+  const byWeekday = group(trades, (t) => weekdayName(realizationDate(t), timeZone), startingBalance);
+  const byMonth = group(trades, (t) => monthKey(realizationDate(t), timeZone), startingBalance);
   const byTimeframe = group(trades, (t) => t.entryTimeframe, startingBalance);
   const byEmotion = group(trades, (t) => t.emotionBefore || "Unspecified", startingBalance);
   const byPlan = group(trades, (t) => (t.followedPlan ? "Followed plan" : "Broke plan"), startingBalance);
@@ -172,7 +179,7 @@ export function buildAnalytics(trades: TradeRow[], startingBalance: string) {
 
   const dailyMap = new Map<string, { pnl: number; trades: number; wins: number; r: number }>();
   for (const t of trades) {
-    const day = (t.exitAt ?? t.entryAt).toISOString().slice(0, 10);
+    const day = zonedDayKey(realizationDate(t), timeZone);
     const cur = dailyMap.get(day) ?? { pnl: 0, trades: 0, wins: 0, r: 0 };
     cur.pnl += Number(t.netPnl);
     cur.trades += 1;
@@ -244,12 +251,15 @@ export function ruleBasedCoach(params: {
   sampleSize: number;
   dateFrom?: string | null;
   dateTo?: string | null;
+  currency?: string;
+  timeZone?: string;
 }): string {
-  const { stats, insights, byInstrument, bySession, byStrategy, mistakes, sampleSize, dateFrom, dateTo, question } =
+  const { stats, insights, byInstrument, bySession, byStrategy, mistakes, sampleSize, dateFrom, dateTo, question, currency, timeZone } =
     params;
   const lines: string[] = [];
   lines.push(`TradeMind Coach — rule-based review (not a live-market signal).`);
   lines.push(`Sample: ${sampleSize} closed trades${dateFrom ? ` from ${dateFrom}` : ""}${dateTo ? ` to ${dateTo}` : ""}.`);
+  if (currency || timeZone) lines.push(`Reporting context: ${currency ?? "account currency"}; timezone ${timeZone ?? "UTC"}; realization-date accounting.`);
   lines.push(`Facts: net P&L ${stats.netPnl}, win rate ${stats.winRate === null ? "n/a" : (stats.winRate * 100).toFixed(1) + "%"}, profit factor ${stats.profitFactor ?? "undefined (no losses)"}, expectancy ${stats.expectancyR ?? "n/a"}R, max drawdown ${stats.maxDrawdown}.`);
   lines.push("");
   if (sampleSize < MIN_SAMPLE_FOR_CONCLUSION) {

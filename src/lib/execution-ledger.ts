@@ -39,6 +39,8 @@ export type NormalizedExecutionFill = {
 export type ExecutionLedger = {
   entryAt: Date;
   exitAt: Date | null;
+  /** Latest partial or final reduction, used for realization-date reporting. */
+  realizedAt: Date | null;
   lastExecutionAt: Date;
   entryPrice: string;
   exitPrice: string | null;
@@ -232,6 +234,7 @@ export function calculateExecutionLedger(input: ExecutionLedgerInput): Execution
   return {
     entryAt,
     exitAt,
+    realizedAt: lastExitAt,
     lastExecutionAt,
     entryPrice,
     exitPrice,

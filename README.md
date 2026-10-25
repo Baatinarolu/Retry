@@ -7,7 +7,8 @@ A private, multi-account trading journal built with Next.js, Neon PostgreSQL, Dr
 - **Trade journal:** long/short trades, contract/tick/pip specifications, fees, partial fills, tags, strategy links, notes, and psychology records.
 - **Execution-led reconciliation:** when fills are supplied, weighted-average entries/exits, realized P&L, remaining quantity, fees, R, and holding time are derived from those fills rather than duplicated summary fields. Invalid over-exits, early exits, reopening, and status mismatches are rejected.
 - **Correct realized metrics:** open trades are excluded from closed-trade win rate, expectancy, drawdown, and equity statistics. Realized P&L from a partially closed open trade still updates its account balance.
-- **Deterministic account ledger:** create/edit/move/delete operations rebuild balances and historical before/after snapshots from the account's starting balance plus realized trade P&L in database transactions.
+- **Deterministic account ledger:** create/edit/move/delete operations rebuild balances and historical before/after snapshots from the account's starting balance plus realized trade P&L in database transactions. Each trade stores a realization timestamp for its final exit or latest partial reduction.
+- **Reporting correctness:** date-only filters and analytics buckets use the workspace timezone with DST-aware boundaries. Aggregate reporting refuses mixed account currencies instead of silently adding incompatible amounts; select one account until explicit FX conversion is available.
 - **Risk workspace:** per-account daily/weekly loss limits, trade and loss-streak limits, open-risk limits, position limits, R:R checks, and daily targets.
 - **Analysis and review:** dashboard, breakdowns, calendar, reports, strategy statistics, and separate R-based simulated backtests.
 - **Data portability:** validated CSV previews, duplicate detection, spreadsheet-safe CSV exports, and JSON trade export.
@@ -138,12 +139,12 @@ A ready-to-use workflow template is included at `docs/db-migrate.yml`. It runs o
 ## Production notes
 
 - **Password resets:** development can display a one-time token because no email provider is bundled. Production never returns reset tokens in API responses; connect an email delivery flow before enabling public self-service resets.
-- **Database:** apply migrations before starting the new version. This release adds session versions and additional uniqueness constraints.
+- **Database:** apply migrations before starting the new version. The latest migration adds and backfills `trades.realized_at` plus its reporting index; existing closed trades and execution reductions are covered by the backfill.
 - **Uploads:** Vercel uses a private Blob store automatically. Outside Vercel, screenshots use `data/uploads` unless Blob credentials are configured; back up that directory and use a persistent volume for self-hosting.
 - **Rate limits:** the built-in limiter is process-local. Use a shared Redis/database limiter at the edge when running multiple instances.
 - **Demo mode:** the demo is a shared sample workspace. Its UI warns users not to enter private data; isolate or make it read-only for a public deployment.
 - **Execution ledger:** weighted-average cost is currently used within a same-direction trade. A flat trade cannot be reopened; start a new trade for the next round trip. Reversals and stop/target change history remain separate feature work. Existing execution-based records retain their prior values until they are next saved; new and edited records reconcile from fills.
-- **Reporting:** use an account filter when accounts have different currencies. Automatic FX conversion and user-timezone period boundaries remain separate feature work; current cross-account totals are raw numeric sums and period boundaries are UTC. Closed-trade analytics intentionally exclude positions that remain open, including any partially realized amount already reflected in the account balance.
+- **Reporting:** timestamps remain UTC instants in PostgreSQL, while date-only filters, daily/monthly buckets, calendar details, AI review periods, and risk windows use the user's IANA timezone. `dateField=exit` means the realization timestamp (final exit or latest partial reduction); entry-date filtering remains available. Aggregate analytics and all-account risk checks require a single account currency; automatic FX conversion and separate deposits/withdrawals/dividends/prop payouts remain future work. Closed-trade analytics intentionally exclude positions that remain open, including any partially realized amount already reflected in the account balance.
 - **Environment:** The project owner has chosen to track `.env` in this repository. Everyone with repository access can read and use the included database and session credentials.
 
 ## Security and dependency status

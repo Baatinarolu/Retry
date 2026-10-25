@@ -1,6 +1,8 @@
 import { db } from "@/db";
 import { riskSettings, trades, tradingAccounts } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
+import { calendarDayBounds, zonedDayKey, zonedWeekBounds } from "@/lib/reporting";
+import { reportingContextFor } from "@/lib/queries";
 import { riskCheckSchema, riskSchema } from "@/lib/validations";
 import Decimal from "decimal.js";
 import { and, eq, gte, lt } from "drizzle-orm";
@@ -65,13 +67,20 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
   const parsed = riskCheckSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid risk check");
   const { accountId } = parsed.data;
   const account = await ownedAccount(session!.uid, accountId);
   if (accountId && !account) return jsonError("Account not found", 404);
+  if (!accountId) {
+    try {
+      await reportingContextFor(session!.uid);
+    } catch (cause) {
+      return jsonError(cause instanceof Error ? cause.message : "Select an account for risk checks");
+    }
+  }
   const plannedRisk = Number(parsed.data.plannedRisk);
   const plannedRr = Number(parsed.data.plannedRr);
   const positionSize = Number(parsed.data.positionSize);
@@ -80,17 +89,14 @@ export async function POST(req: NextRequest) {
   const settings = accountId ? list.find((row) => row.accountId === accountId) : list[0];
   if (accountId && !settings) return jsonError("No risk profile for this account", 404);
 
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
-  const tomorrow = new Date(start);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const week = new Date(start);
-  week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
-  const nextWeek = new Date(week);
-  nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+  const timeZone = user!.timezone;
+  const now = new Date();
+  const today = zonedDayKey(now, timeZone);
+  const { start, end: tomorrow } = calendarDayBounds(today, timeZone);
+  const { start: week, end: nextWeek } = zonedWeekBounds(now, timeZone);
   const accountFilter = accountId ? eq(trades.accountId, accountId) : undefined;
 
-  const [todayTrades, weekTrades, openTrades] = await Promise.all([
+  const [todayEntries, todayTrades, weekTrades, openTrades] = await Promise.all([
     db
       .select()
       .from(trades)
@@ -98,7 +104,11 @@ export async function POST(req: NextRequest) {
     db
       .select()
       .from(trades)
-      .where(and(eq(trades.userId, session!.uid), accountFilter, gte(trades.entryAt, week), lt(trades.entryAt, nextWeek))),
+      .where(and(eq(trades.userId, session!.uid), accountFilter, gte(trades.realizedAt, start), lt(trades.realizedAt, tomorrow))),
+    db
+      .select()
+      .from(trades)
+      .where(and(eq(trades.userId, session!.uid), accountFilter, gte(trades.realizedAt, week), lt(trades.realizedAt, nextWeek))),
     db
       .select()
       .from(trades)
@@ -106,14 +116,14 @@ export async function POST(req: NextRequest) {
   ]);
 
   const sumPnl = (rows: typeof todayTrades) =>
-    rows.reduce((sum, trade) => sum.plus(trade.status === "closed" ? trade.netPnl : 0), new Decimal(0)).toNumber();
+    rows.reduce((sum, trade) => sum.plus(trade.netPnl), new Decimal(0)).toNumber();
   const dailyPnl = sumPnl(todayTrades);
   const weeklyPnl = sumPnl(weekTrades);
   const openRisk = openTrades.reduce((sum, trade) => sum.plus(trade.initialRisk), new Decimal(0)).toNumber();
   let streak = 0;
   const sorted = [...todayTrades]
     .filter((trade) => trade.status === "closed")
-    .sort((a, b) => (b.exitAt ?? b.entryAt).getTime() - (a.exitAt ?? a.entryAt).getTime());
+    .sort((a, b) => (b.realizedAt ?? b.exitAt ?? b.entryAt).getTime() - (a.realizedAt ?? a.exitAt ?? a.entryAt).getTime());
   for (const trade of sorted) {
     if (trade.result === "loss") streak += 1;
     else break;
@@ -127,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (Number(settings.maxWeeklyLoss) > 0 && weeklyPnl - plannedRisk <= -Number(settings.maxWeeklyLoss)) {
       warnings.push("This idea may exceed the maximum weekly loss.");
     }
-    if (settings.maxTradesPerDay > 0 && todayTrades.length >= settings.maxTradesPerDay) {
+    if (settings.maxTradesPerDay > 0 && todayEntries.length >= settings.maxTradesPerDay) {
       warnings.push("Maximum trades per day already reached.");
     }
     if (settings.maxConsecutiveLosses > 0 && streak >= settings.maxConsecutiveLosses) {
@@ -157,8 +167,10 @@ export async function POST(req: NextRequest) {
     warnings,
     remainingDailyLoss:
       settings && Number(settings.maxDailyLoss) > 0 ? Number(settings.maxDailyLoss) + dailyPnl : null,
-    tradesToday: todayTrades.length,
+    tradesToday: todayEntries.length,
+    realizedTradesToday: todayTrades.length,
     consecutiveLosses: streak,
+    timezone: timeZone,
     dailyPnl,
     weeklyPnl,
     openRisk,

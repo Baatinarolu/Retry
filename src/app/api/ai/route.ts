@@ -1,10 +1,11 @@
 import { db } from "@/db";
-import { aiReviews, users } from "@/db/schema";
+import { aiReviews } from "@/db/schema";
 import { jsonError, parseFilters, requireUser } from "@/lib/api";
 import { buildAnalytics, ruleBasedCoach } from "@/lib/analytics";
 import { generateCoachReview } from "@/lib/coach";
 import { rateLimit } from "@/lib/auth";
-import { loadTradeRows, startingBalanceFor } from "@/lib/queries";
+import { loadTradeRows, reportingContextFor } from "@/lib/queries";
+import { shiftCalendarDate, zonedDayKey } from "@/lib/reporting";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -23,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
   if (!rateLimit(`ai:${session!.uid}`, 10).ok) return jsonError("Too many reviews. Try again shortly.", 429);
   const body = await req.json().catch(() => ({}));
@@ -34,9 +35,16 @@ export async function POST(req: NextRequest) {
   const filters = parseFilters(new URL(req.url));
   if (body.from) filters.from = body.from;
   if (body.to) filters.to = body.to;
-  const rows = await loadTradeRows(session!.uid, filters);
-  const starting = await startingBalanceFor(session!.uid, filters.accountId);
-  const analytics = buildAnalytics(rows, starting);
+  const timeZone = user!.timezone;
+  if (type === "weekly" || type === "monthly") {
+    const today = zonedDayKey(new Date(), timeZone);
+    filters.to = today;
+    filters.from = type === "weekly" ? shiftCalendarDate(today, -6) : `${today.slice(0, 7)}-01`;
+    filters.dateField = "exit";
+  }
+  const context = await reportingContextFor(session!.uid, filters.accountId);
+  const rows = await loadTradeRows(session!.uid, filters, timeZone);
+  const analytics = buildAnalytics(rows, context.startingBalance, timeZone);
   const facts = ruleBasedCoach({
     question,
     stats: analytics.stats,
@@ -48,13 +56,14 @@ export async function POST(req: NextRequest) {
     sampleSize: rows.length,
     dateFrom: filters.from,
     dateTo: filters.to,
+    currency: context.currency,
+    timeZone,
   });
 
-  const [user] = await db.select().from(users).where(eq(users.id, session!.uid));
   const coach = await generateCoachReview({
     facts,
     question,
-    permission: Boolean(user?.aiPermission),
+    permission: Boolean(user!.aiPermission),
   });
   const { content, source } = coach;
 

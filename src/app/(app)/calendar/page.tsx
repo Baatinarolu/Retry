@@ -84,7 +84,7 @@ export default function CalendarPage() {
         <div>
           <p className="eyebrow mb-3">Daily record / Realized outcomes</p>
           <h1>Calendar</h1>
-          <p className="page-description">Realized net P&amp;L by exit date. Day details use the same filters as the heat map.</p>
+          <p className="page-description">Realized net P&amp;L by realization date in your workspace timezone. Day details use the same filters as the heat map.</p>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={colorBlind} onChange={(e) => setColorBlind(e.target.checked)} />

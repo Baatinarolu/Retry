@@ -55,7 +55,7 @@ export default function TradeDetailPage() {
         <div>
           <p className="eyebrow mb-3">Trade docket / {trade.displayId}</p>
           <h1 className="capitalize">{trade.instrument} {trade.direction}</h1>
-          <p className="page-description">{formatWhen(trade.entryAt)} → {formatWhen(trade.exitAt)} · {trade.session}</p>
+          <p className="page-description">{formatWhen(trade.entryAt)} → {formatWhen(trade.realizedAt ?? trade.exitAt)} · {trade.session}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/journal" className="btn btn-ghost">Back to journal</Link>
