@@ -1,15 +1,18 @@
 import { db } from "@/db";
 import {
+  fxRates,
   psychologyRecords,
   strategies,
   tags,
   trades,
   tradingAccounts,
+  users,
 } from "@/db/schema";
 import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import type { TradeRow } from "./analytics";
 import { calendarDayBounds, commonReportingCurrency, isCalendarDate } from "./reporting";
+import { convertStartingBalancesToCurrency, convertTradeRowsToCurrency } from "./fx";
 
 export type TradeFilters = {
   from?: string | null;
@@ -71,8 +74,10 @@ export async function loadTradeRows(userId: string, filters: TradeFilters = {}, 
       trade: trades,
       strategyName: strategies.name,
       psych: psychologyRecords,
+      accountCurrency: tradingAccounts.currency,
     })
     .from(trades)
+    .leftJoin(tradingAccounts, eq(tradingAccounts.id, trades.accountId))
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .leftJoin(psychologyRecords, eq(psychologyRecords.tradeId, trades.id))
     .where(and(tradeWhere(userId, filters, timeZone), eq(trades.status, "closed")))
@@ -80,6 +85,8 @@ export async function loadTradeRows(userId: string, filters: TradeFilters = {}, 
 
   return rows.map((r) => ({
     id: r.trade.id,
+    accountId: r.trade.accountId,
+    accountCurrency: r.accountCurrency,
     displayId: r.trade.displayId,
     instrument: r.trade.instrument,
     strategyId: r.trade.strategyId,
@@ -127,7 +134,19 @@ export async function getUserTags(userId: string) {
   return db.select().from(tags).where(eq(tags.userId, userId)).orderBy(tags.name);
 }
 
-export async function reportingContextFor(userId: string, accountId?: string | null) {
+export type ReportingConversion = {
+  enabled: boolean;
+  targetCurrency: string;
+  asOf: string | null;
+  rateCount: number;
+  method: string;
+};
+
+export async function reportingContextFor(
+  userId: string,
+  accountId?: string | null,
+  options: { convertMixed?: boolean } = {},
+) {
   const accounts = accountId
     ? await db
         .select()
@@ -136,11 +155,40 @@ export async function reportingContextFor(userId: string, accountId?: string | n
     : await getUserAccounts(userId);
   if (accountId && !accounts.length) throw new Error("Account not found");
 
-  const currency = commonReportingCurrency(accounts.map((account) => account.currency));
-  const startingBalance = accounts
-    .reduce((total, account) => total.plus(account.startingBalance), new Decimal(0))
-    .toFixed(2);
-  return { currency, startingBalance };
+  const currencies = accounts.map((account) => account.currency.trim().toUpperCase()).filter(Boolean);
+  const uniqueCurrencies = [...new Set(currencies)];
+  if (uniqueCurrencies.length <= 1) {
+    const currency = commonReportingCurrency(currencies);
+    const startingBalance = accounts
+      .reduce((total, account) => total.plus(account.startingBalance), new Decimal(0))
+      .toFixed(2);
+    const conversion: ReportingConversion = {
+      enabled: false,
+      targetCurrency: currency,
+      asOf: null,
+      rateCount: 0,
+      method: "native account currency",
+    };
+    return { currency, startingBalance, conversion, convertTrades: (rows: TradeRow[]) => rows };
+  }
+  if (!options.convertMixed) {
+    throw new Error("Select one account for reporting. Cross-currency totals require explicit FX conversion.");
+  }
+
+  const [user] = await db.select({ baseCurrency: users.baseCurrency }).from(users).where(eq(users.id, userId)).limit(1);
+  const targetCurrency = (user?.baseCurrency || "USD").trim().toUpperCase();
+  const rates = await db.select().from(fxRates).where(eq(fxRates.userId, userId));
+  const asOf = new Date();
+  const startingBalance = convertStartingBalancesToCurrency(accounts, targetCurrency, asOf, rates);
+  const conversion: ReportingConversion = {
+    enabled: true,
+    targetCurrency,
+    asOf: asOf.toISOString(),
+    rateCount: rates.length,
+    method: "latest effective manual rate on or before each realization; starting balances use the report-time rate",
+  };
+  const convertTrades = (rows: TradeRow[]) => convertTradeRowsToCurrency(rows, targetCurrency, rates);
+  return { currency: targetCurrency, startingBalance, conversion, convertTrades };
 }
 
 export async function startingBalanceFor(userId: string, accountId?: string | null) {

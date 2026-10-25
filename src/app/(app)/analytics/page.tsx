@@ -2,6 +2,7 @@
 
 import { DistBars, EquityChart } from "@/components/Charts";
 import { Filters } from "@/components/Filters";
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Card, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, formatPct, pnlClass } from "@/lib/format";
@@ -38,6 +39,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-7">
       {error ? <Banner tone="warn">{error}</Banner> : null}
+      <FxConversionNotice conversion={data.conversion} />
       <div className="page-heading">
         <div>
           <p className="eyebrow mb-3">Evidence / Performance analysis</p>

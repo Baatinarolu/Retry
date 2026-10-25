@@ -2,6 +2,7 @@
 
 import { Filters } from "@/components/Filters";
 import { ImportMappingPresets } from "@/components/ImportMappingPresets";
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Button, Card } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { APP_NAME } from "@/lib/constants";
@@ -13,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 export default function ReportsPage() {
   const ws = useWorkspace();
   const [report, setReport] = useState<any>(null);
+  const [reportError, setReportError] = useState("");
   const [preview, setPreview] = useState<any>(null);
   const [csv, setCsv] = useState("");
   const [mapping, setMapping] = useState<ImportColumnMapping>({});
@@ -32,7 +34,26 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (ws.loading) return;
-    fetch(`/api/reports?${ws.qs}`).then((r) => r.json()).then(setReport);
+    let cancelled = false;
+    fetch(`/api/reports?${ws.qs}`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not build the report");
+        return data;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setReport(data);
+          setReportError("");
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setReport(null);
+          setReportError(cause instanceof Error ? cause.message : "Could not build the report");
+        }
+      });
+    return () => { cancelled = true; };
   }, [ws.loading, ws.qs]);
 
   function changeMapping(next: ImportColumnMapping) {
@@ -106,11 +127,13 @@ export default function ReportsPage() {
       <section className="filter-panel no-print" aria-label="Report filters">
         <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
       </section>
+      {reportError ? <Banner tone="warn">{reportError} Add the required dated rate in Settings → FX rates.</Banner> : null}
       {report ? (
         <Card>
           <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{APP_NAME}</p>
           <h2 className="text-xl font-semibold">Performance report</h2>
           <p className="text-sm text-[var(--muted)]">Generated {new Date(report.generatedAt).toLocaleString()} · n={report.sampleSize}</p>
+          <div className="mt-3"><FxConversionNotice conversion={report.conversion} /></div>
           <div className="mt-4 grid gap-2 md:grid-cols-4 text-sm">
             <div className="card-quiet p-3">Net {formatMoney(report.stats.netPnl, ws.currency)}</div>
             <div className="card-quiet p-3">Win rate {formatPct(report.stats.winRate)}</div>

@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
     filters.from = type === "weekly" ? shiftCalendarDate(today, -6) : `${today.slice(0, 7)}-01`;
     filters.dateField = "exit";
   }
-  const context = await reportingContextFor(session!.uid, filters.accountId);
-  const rows = await loadTradeRows(session!.uid, filters, timeZone);
+  const context = await reportingContextFor(session!.uid, filters.accountId, { convertMixed: true });
+  const rows = context.convertTrades(await loadTradeRows(session!.uid, filters, timeZone));
   const analytics = buildAnalytics(rows, context.startingBalance, timeZone);
   const facts = ruleBasedCoach({
     question,
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     dateTo: filters.to,
     currency: context.currency,
     timeZone,
+    conversion: context.conversion,
   });
 
   const coach = await generateCoachReview({

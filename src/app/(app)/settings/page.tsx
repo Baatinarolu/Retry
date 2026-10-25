@@ -1,8 +1,10 @@
 "use client";
 
 import { CashFlowPanel } from "@/components/CashFlowPanel";
+import { FxRatesPanel } from "@/components/FxRatesPanel";
 import { Banner, Button, Card, Field, Input, Select } from "@/components/ui";
 import { CURRENCIES, TIMEZONES } from "@/lib/constants";
+import { formatMoney } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -110,7 +112,7 @@ export default function SettingsPage() {
           {accounts.map((a) => (
             <li key={a.id} className="flex justify-between border-b border-[var(--border)] py-2">
               <span>{a.name} · {a.broker || "no broker"} · {a.currency} · {a.accountType}</span>
-              <span>{a.currentBalance}</span>
+              <span>{formatMoney(a.currentBalance, a.currency)}</span>
             </li>
           ))}
         </ul>
@@ -124,6 +126,8 @@ export default function SettingsPage() {
       </Card>
 
       <CashFlowPanel accounts={accounts} onChanged={reload} />
+
+      <FxRatesPanel />
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Instrument specifications</h2>
@@ -169,7 +173,7 @@ export default function SettingsPage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Privacy</h2>
-        <p className="text-sm text-[var(--muted)]">Download a versioned full-workspace backup, including executions, settings, cash movements, import batches, and private image attachments. Restore replaces the current workspace after explicit confirmation.</p>
+        <p className="text-sm text-[var(--muted)]">Download a versioned full-workspace backup, including executions, settings, cash movements, the FX rate book, import batches, and private image attachments. Restore replaces the current workspace after explicit confirmation.</p>
         <div className="flex flex-wrap gap-2">
           <a className="btn btn-ghost" href="/api/backup">Download full backup</a>
           <a className="btn btn-ghost" href="/api/export?format=json">Trade-only JSON</a>

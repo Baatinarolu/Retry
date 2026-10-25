@@ -1,6 +1,7 @@
 "use client";
 
 import { Filters } from "@/components/Filters";
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Button, Card } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, formatR, pnlClass } from "@/lib/format";
@@ -13,6 +14,7 @@ export default function CalendarPage() {
   const { loading: workspaceLoading, loadAnalytics } = ws;
   const [cursor, setCursor] = useState(new Date());
   const [daily, setDaily] = useState<{ date: string; pnl: number; trades: number; winRate: number; r: number }[]>([]);
+  const [conversion, setConversion] = useState<any>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [dayTrades, setDayTrades] = useState<any[]>([]);
   const [note, setNote] = useState("");
@@ -25,6 +27,7 @@ export default function CalendarPage() {
     loadAnalytics(controller.signal)
       .then((result) => {
         setDaily(result.analytics?.daily || []);
+        setConversion(result.conversion || null);
         setError("");
       })
       .catch((cause: unknown) => {
@@ -80,6 +83,7 @@ export default function CalendarPage() {
   return (
     <div className="space-y-7">
       {ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : null}
+      <FxConversionNotice conversion={conversion} />
       <div className="page-heading">
         <div>
           <p className="eyebrow mb-3">Daily record / Realized outcomes</p>
@@ -145,7 +149,7 @@ export default function CalendarPage() {
               <li key={t.id}>
                 <Link href={`/trades/${t.id}`} className="flex justify-between text-sm">
                   <span>{t.instrument} {t.direction}</span>
-                  <span className={pnlClass(t.netPnl)}>{formatMoney(t.netPnl, ws.currency)} · {formatR(t.rMultiple)}</span>
+                  <span className={pnlClass(t.netPnl)}>{formatMoney(t.netPnl, t.accountCurrency || ws.currency)} · {formatR(t.rMultiple)}</span>
                 </Link>
               </li>
             ))}

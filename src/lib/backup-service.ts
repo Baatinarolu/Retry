@@ -7,6 +7,7 @@ import {
   cashFlows,
   customSessions,
   dailyJournals,
+  fxRates,
   importBatches,
   importMappingPresets,
   instruments,
@@ -67,6 +68,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
   const [
     tradingAccountRows,
     cashFlowRows,
+    fxRateRows,
     riskRows,
     instrumentRows,
     strategyRows,
@@ -89,6 +91,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
   ] = await Promise.all([
     db.select().from(tradingAccounts).where(eq(tradingAccounts.userId, userId)),
     db.select().from(cashFlows).where(eq(cashFlows.userId, userId)),
+    db.select().from(fxRates).where(eq(fxRates.userId, userId)),
     db.select().from(riskSettings).where(eq(riskSettings.userId, userId)),
     db.select().from(instruments).where(eq(instruments.userId, userId)),
     db.select().from(strategies).where(eq(strategies.userId, userId)),
@@ -131,6 +134,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     data: {
       tradingAccounts: tradingAccountRows,
       cashFlows: cashFlowRows,
+      fxRates: fxRateRows,
       riskSettings: riskRows,
       instruments: instrumentRows,
       strategies: strategyRows,
@@ -200,6 +204,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await tx.delete(backtestTrades).where(eq(backtestTrades.userId, userId));
       await tx.delete(backtests).where(eq(backtests.userId, userId));
       await tx.delete(cashFlows).where(eq(cashFlows.userId, userId));
+      await tx.delete(fxRates).where(eq(fxRates.userId, userId));
       await tx.delete(importBatches).where(eq(importBatches.userId, userId));
       await tx.delete(dailyJournals).where(eq(dailyJournals.userId, userId));
       await tx.delete(riskSettings).where(eq(riskSettings.userId, userId));
@@ -223,6 +228,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await insertRows(tx, riskSettings, owned(data.riskSettings, userId));
       await insertRows(tx, importBatches, owned(data.importBatches, userId));
       await insertRows(tx, cashFlows, owned(data.cashFlows, userId));
+      await insertRows(tx, fxRates, owned(data.fxRates, userId));
       await insertRows(tx, dailyJournals, owned(data.dailyJournals, userId));
       await insertRows(tx, trades, owned(data.trades, userId));
       await insertRows(tx, tradeExecutions, owned(data.tradeExecutions, userId));

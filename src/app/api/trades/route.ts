@@ -5,6 +5,7 @@ import {
   tags,
   tradeTags,
   trades,
+  tradingAccounts,
 } from "@/db/schema";
 import { jsonError, parseFilters, requireUser } from "@/lib/api";
 import { tradeWhere } from "@/lib/queries";
@@ -46,8 +47,9 @@ export async function GET(req: NextRequest) {
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .where(where);
   const rows = await db
-    .select({ trade: trades, strategyName: strategies.name })
+    .select({ trade: trades, strategyName: strategies.name, accountCurrency: tradingAccounts.currency })
     .from(trades)
+    .leftJoin(tradingAccounts, eq(tradingAccounts.id, trades.accountId))
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .where(where)
     .orderBy(desc(trades.entryAt), desc(trades.id))
@@ -73,6 +75,7 @@ export async function GET(req: NextRequest) {
     limit,
     trades: rows.map((r) => ({
       ...r.trade,
+      accountCurrency: r.accountCurrency,
       strategyName: r.strategyName,
       tags: tagRows.filter((t) => t.tradeId === r.trade.id).map((t) => t.tag),
       screenshotCount: shots.filter((s) => s.tradeId === r.trade.id).length,

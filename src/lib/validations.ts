@@ -102,6 +102,19 @@ export const accountSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
+export const fxRateSchema = z.object({
+  fromCurrency: z.string().trim().regex(/^[A-Za-z]{3,8}$/, "Use a 3–8 letter currency code"),
+  toCurrency: z.string().trim().regex(/^[A-Za-z]{3,8}$/, "Use a 3–8 letter currency code"),
+  rate: requiredPositive,
+  effectiveAt: dateTimeString,
+  source: z.string().trim().min(1).max(80).optional().default("manual"),
+  notes: optionalText(500),
+}).strict().superRefine((value, ctx) => {
+  if (value.fromCurrency.toUpperCase() === value.toCurrency.toUpperCase()) {
+    ctx.addIssue({ code: "custom", path: ["toCurrency"], message: "Source and target currencies must differ" });
+  }
+});
+
 export const cashFlowSchema = z
   .object({
     accountId: z.string().uuid(),

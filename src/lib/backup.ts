@@ -10,6 +10,7 @@ export const MAX_TOTAL_ATTACHMENT_BYTES = 32 * 1024 * 1024;
 export const BACKUP_TABLES = [
   "tradingAccounts",
   "cashFlows",
+  "fxRates",
   "riskSettings",
   "instruments",
   "strategies",
@@ -36,7 +37,7 @@ export type BackupRow = Record<string, any>;
 
 const rowSchema = z.record(z.string(), z.unknown());
 const rowsSchema = z.array(rowSchema).max(100_000);
-const optionalBackupTables = new Set<string>(["savedViews", "importMappingPresets", "tradePricePoints", "tradeRiskLevels"]);
+const optionalBackupTables = new Set<string>(["fxRates", "savedViews", "importMappingPresets", "tradePricePoints", "tradeRiskLevels"]);
 const dataSchema = z.object(Object.fromEntries(BACKUP_TABLES.map((key) => [
   key,
   optionalBackupTables.has(key) ? rowsSchema.optional().default([]) : rowsSchema,
@@ -156,6 +157,7 @@ export function validateBackupReferences(backup: BackupEnvelope) {
 const TIMESTAMP_COLUMNS: Partial<Record<BackupTable, string[]>> = {
   tradingAccounts: ["createdAt", "updatedAt"],
   cashFlows: ["occurredAt", "createdAt", "updatedAt"],
+  fxRates: ["effectiveAt", "createdAt"],
   riskSettings: ["createdAt", "updatedAt"],
   instruments: ["createdAt"],
   strategies: ["createdAt", "updatedAt"],

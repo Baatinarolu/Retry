@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { psychologyRecords, strategies, trades } from "@/db/schema";
+import { psychologyRecords, strategies, trades, tradingAccounts } from "@/db/schema";
 import { parseFilters, requireUser } from "@/lib/api";
 import { csvLine } from "@/lib/csv";
 import { tradeWhere } from "@/lib/queries";
@@ -15,8 +15,9 @@ export async function GET(req: NextRequest) {
   const format = url.searchParams.get("format") || "csv";
   const filters = parseFilters(url);
   const rows = await db
-    .select({ trade: trades, strategyName: strategies.name, psych: psychologyRecords })
+    .select({ trade: trades, strategyName: strategies.name, psych: psychologyRecords, accountCurrency: tradingAccounts.currency })
     .from(trades)
+    .leftJoin(tradingAccounts, eq(tradingAccounts.id, trades.accountId))
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .leftJoin(psychologyRecords, eq(psychologyRecords.tradeId, trades.id))
     .where(tradeWhere(session!.uid, filters, user!.timezone));
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         exportedAt: new Date().toISOString(),
-        trades: rows.map((row) => ({ ...row.trade, strategyName: row.strategyName, psychology: row.psych })),
+        trades: rows.map((row) => ({ ...row.trade, accountCurrency: row.accountCurrency, strategyName: row.strategyName, psychology: row.psych })),
       },
       {
         headers: {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
 
   const headers = [
     "display_id",
+    "account_currency",
     "instrument",
     "direction",
     "entry_at",
@@ -74,6 +76,7 @@ export async function GET(req: NextRequest) {
     lines.push(
       csvLine([
         trade.displayId,
+        row.accountCurrency,
         trade.instrument,
         trade.direction,
         trade.entryAt.toISOString(),

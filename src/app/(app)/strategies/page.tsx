@@ -1,11 +1,15 @@
 "use client";
 
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Button, Card, Empty, Field, Input, Spinner, Textarea } from "@/components/ui";
 import { formatMoney, formatPct } from "@/lib/format";
 import { useEffect, useState } from "react";
 
 export default function StrategiesPage() {
   const [list, setList] = useState<any[]>([]);
+  const [currency, setCurrency] = useState("USD");
+  const [conversion, setConversion] = useState<any>(null);
+  const [error, setError] = useState("");
   const [open, setOpen] = useState<any | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -22,10 +26,23 @@ export default function StrategiesPage() {
   const [loading, setLoading] = useState(true);
 
   function reload() {
-    fetch("/api/strategies").then((r) => r.json()).then((d) => {
-      setList(d.strategies || []);
-      setLoading(false);
-    });
+    fetch("/api/strategies")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not load strategy statistics");
+        return data;
+      })
+      .then((data) => {
+        setList(data.strategies || []);
+        setCurrency(data.currency || "USD");
+        setConversion(data.conversion || null);
+        setError("");
+        setLoading(false);
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not load strategy statistics");
+        setLoading(false);
+      });
   }
   useEffect(reload, []);
 
@@ -57,6 +74,8 @@ export default function StrategiesPage() {
           <p className="page-description">Performance is historical journal data for linked trades. Versioning preserves the rules you actually traded.</p>
         </div>
       </div>
+      {error ? <Banner tone="warn">{error} Add the required dated rate in Settings → FX rates.</Banner> : null}
+      <FxConversionNotice conversion={conversion} />
       <Banner>Creating a new version does not rewrite past trades — they stay attached to the version they were logged against.</Banner>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-3">
@@ -87,7 +106,7 @@ export default function StrategiesPage() {
                   <p>WR {formatPct(s.stats.winRate)}</p>
                   <p>PF {s.stats.profitFactor ?? "n/a"}</p>
                   <p>Exp {s.stats.expectancyR ?? "—"}R</p>
-                  <p>{formatMoney(s.stats.netPnl)}</p>
+                  <p>{formatMoney(s.stats.netPnl, currency)}</p>
                 </div>
               </div>
             </button>

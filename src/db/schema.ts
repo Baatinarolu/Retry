@@ -105,6 +105,28 @@ export const cashFlows = pgTable(
   ],
 );
 
+export const fxRates = pgTable(
+  "fx_rates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fromCurrency: text("from_currency").notNull(),
+    toCurrency: text("to_currency").notNull(),
+    /** One unit of fromCurrency equals rate units of toCurrency. */
+    rate: numeric("rate", { precision: 24, scale: 12 }).notNull(),
+    effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+    source: text("source").notNull().default("manual"),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("fx_rates_user_idx").on(t.userId),
+    uniqueIndex("fx_rates_pair_time_unique").on(t.userId, t.fromCurrency, t.toCurrency, t.effectiveAt),
+  ],
+);
+
 export const riskSettings = pgTable(
   "risk_settings",
   {

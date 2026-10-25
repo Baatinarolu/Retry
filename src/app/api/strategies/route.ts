@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { strategies, trades } from "@/db/schema";
+import { strategies } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
 import { computePerformanceStats } from "@/lib/calculations";
+import { loadTradeRows, reportingContextFor } from "@/lib/queries";
 import { strategySchema } from "@/lib/validations";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -9,15 +10,20 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
-  const list = await db.select().from(strategies).where(eq(strategies.userId, session!.uid));
-  const allTrades = await db.select().from(trades).where(eq(trades.userId, session!.uid));
-  const withStats = list.map((s) => {
-    const linked = allTrades.filter((t) => t.strategyId === s.id && t.status === "closed");
-    return { ...s, stats: computePerformanceStats(linked) };
-  });
-  return NextResponse.json({ strategies: withStats });
+  try {
+    const list = await db.select().from(strategies).where(eq(strategies.userId, session!.uid));
+    const context = await reportingContextFor(session!.uid, null, { convertMixed: true });
+    const rows = context.convertTrades(await loadTradeRows(session!.uid, {}, user!.timezone));
+    const withStats = list.map((strategy) => {
+      const linked = rows.filter((trade) => trade.strategyId === strategy.id);
+      return { ...strategy, stats: computePerformanceStats(linked) };
+    });
+    return NextResponse.json({ strategies: withStats, currency: context.currency, conversion: context.conversion });
+  } catch (cause) {
+    return jsonError(cause instanceof Error ? cause.message : "Could not load strategy statistics");
+  }
 }
 
 export async function POST(req: NextRequest) {

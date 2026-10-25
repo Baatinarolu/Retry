@@ -1,5 +1,6 @@
 "use client";
 
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Button, Card, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, pnlClass } from "@/lib/format";
@@ -31,6 +32,7 @@ export default function PsychologyPage() {
 
   return (
     <div className="space-y-7">
+      <FxConversionNotice conversion={data.conversion} />
       <div className="page-heading">
         <div>
           <p className="eyebrow mb-3">Behavior / Process review</p>

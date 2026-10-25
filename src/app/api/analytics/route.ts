@@ -11,14 +11,15 @@ export async function GET(req: NextRequest) {
   try {
     const filters = parseFilters(new URL(req.url));
     const timeZone = user!.timezone;
-    const context = await reportingContextFor(session!.uid, filters.accountId);
-    const rows = await loadTradeRows(session!.uid, filters, timeZone);
+    const context = await reportingContextFor(session!.uid, filters.accountId, { convertMixed: true });
+    const rows = context.convertTrades(await loadTradeRows(session!.uid, filters, timeZone));
     const analytics = buildAnalytics(rows, context.startingBalance, timeZone);
     return NextResponse.json({
       analytics,
       sampleSize: rows.length,
       startingBalance: context.startingBalance,
       currency: context.currency,
+      conversion: context.conversion,
       timezone: timeZone,
       realizationDate: "realizedAt",
     });

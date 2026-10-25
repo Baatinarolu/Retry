@@ -2,6 +2,7 @@
 
 import { EquityChart, PnlBars } from "@/components/Charts";
 import { Filters } from "@/components/Filters";
+import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Card, Empty, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { apiJson } from "@/lib/client-api";
@@ -13,7 +14,7 @@ import { useEffect, useState } from "react";
 export default function DashboardPage() {
   const ws = useWorkspace();
   const { loading: workspaceLoading, loadAnalytics, loadTrades, loadReviewQueue } = ws;
-  const [data, setData] = useState<{ analytics?: any; sampleSize?: number } | null>(null);
+  const [data, setData] = useState<{ analytics?: any; sampleSize?: number; conversion?: any } | null>(null);
   const [recent, setRecent] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [reviewData, setReviewData] = useState<any>(null);
@@ -63,6 +64,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-7">
       {error ? <Banner tone="warn">{error}</Banner> : null}
+      <FxConversionNotice conversion={data.conversion} />
       <div className="page-heading">
         <div>
           <p className="eyebrow mb-3">Overview / Your trading record</p>
@@ -243,7 +245,7 @@ function TradeMini({ rows, currency }: { rows: any[]; currency: string }) {
               </div>
               <div className="shrink-0 text-right">
                 <span className={`badge ${badge.className}`}>{badge.label}</span>
-                <p className={`mt-1.5 font-mono text-xs ${pnlClass(t.netPnl)}`}>{formatMoney(t.netPnl, currency)}</p>
+                <p className={`mt-1.5 font-mono text-xs ${pnlClass(t.netPnl)}`}>{formatMoney(t.netPnl, t.reportingCurrency || t.accountCurrency || currency)}</p>
               </div>
             </Link>
           </li>

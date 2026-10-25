@@ -12,6 +12,9 @@ import { buildBehaviorSequences } from "./behavior-sequences";
 
 export type TradeRow = ClosedTradeStatsInput & {
   id: string;
+  accountId?: string;
+  accountCurrency?: string | null;
+  reportingCurrency?: string;
   displayId: string;
   instrument: string;
   strategyId: string | null;
@@ -259,13 +262,15 @@ export function ruleBasedCoach(params: {
   dateTo?: string | null;
   currency?: string;
   timeZone?: string;
+  conversion?: { enabled: boolean; targetCurrency: string; method: string };
 }): string {
-  const { stats, insights, byInstrument, bySession, byStrategy, mistakes, sampleSize, dateFrom, dateTo, question, currency, timeZone } =
+  const { stats, insights, byInstrument, bySession, byStrategy, mistakes, sampleSize, dateFrom, dateTo, question, currency, timeZone, conversion } =
     params;
   const lines: string[] = [];
   lines.push(`TradeMind Coach — rule-based review (not a live-market signal).`);
   lines.push(`Sample: ${sampleSize} closed trades${dateFrom ? ` from ${dateFrom}` : ""}${dateTo ? ` to ${dateTo}` : ""}.`);
   if (currency || timeZone) lines.push(`Reporting context: ${currency ?? "account currency"}; timezone ${timeZone ?? "UTC"}; realization-date accounting.`);
+  if (conversion?.enabled) lines.push(`FX disclosure: mixed-account money facts are converted to ${conversion.targetCurrency}; ${conversion.method}. Native account ledgers and R multiples are unchanged.`);
   lines.push(`Facts: net P&L ${stats.netPnl}, win rate ${stats.winRate === null ? "n/a" : (stats.winRate * 100).toFixed(1) + "%"}, profit factor ${stats.profitFactor ?? "undefined (no losses)"}, expectancy ${stats.expectancyR ?? "n/a"}R, max drawdown ${stats.maxDrawdown}.`);
   lines.push("");
   if (sampleSize < MIN_SAMPLE_FOR_CONCLUSION) {

@@ -82,7 +82,7 @@ export default function JournalPage() {
                       <td>{formatWhen(t.entryAt)}</td>
                       <td>{t.instrument}</td>
                       <td className="capitalize">{t.direction}</td>
-                      <td className={`font-mono-num ${pnlClass(t.netPnl)}`}>{formatMoney(t.netPnl, ws.currency)}</td>
+                      <td className={`font-mono-num ${pnlClass(t.netPnl)}`}>{formatMoney(t.netPnl, t.accountCurrency || ws.currency)}</td>
                       <td className="font-mono-num">{formatR(t.rMultiple)}</td>
                       <td><span className={`badge ${b.className}`}>{b.label}</span></td>
                       <td>{t.followedPlan ? "Yes" : "No"}</td>
