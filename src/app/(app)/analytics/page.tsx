@@ -56,6 +56,32 @@ export default function AnalyticsPage() {
         <Stat label="Recovery factor" value={s.recoveryFactor ?? "n/a"} hint="Net / max DD" />
       </div>
       <Card>
+        <div className="card-heading"><div><p className="eyebrow mb-2">Sensitivity check</p><h2>Outlier dependence</h2></div><span>Leave one out</span></div>
+        <div className="stats-grid mt-5 grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Best / gross profit"
+            value={a.outliers.best?.share == null ? "—" : formatPct(a.outliers.best.share)}
+            hint={a.outliers.best ? `${a.outliers.best.instrument} · ${a.outliers.best.displayId}` : "No closed trades"}
+          />
+          <Stat
+            label="Net without best"
+            value={a.outliers.withoutBest ? formatMoney(a.outliers.withoutBest.netPnl, ws.currency) : "—"}
+            hint={a.outliers.withoutBest ? `n=${a.outliers.withoutBest.totalTrades} · Exp ${a.outliers.withoutBest.expectancyR ?? "—"}R` : "No comparison"}
+          />
+          <Stat
+            label="Worst / gross loss"
+            value={a.outliers.worst?.share == null ? "—" : formatPct(a.outliers.worst.share)}
+            hint={a.outliers.worst ? `${a.outliers.worst.instrument} · ${a.outliers.worst.displayId}` : "No closed trades"}
+          />
+          <Stat
+            label="Net without worst"
+            value={a.outliers.withoutWorst ? formatMoney(a.outliers.withoutWorst.netPnl, ws.currency) : "—"}
+            hint={a.outliers.withoutWorst ? `n=${a.outliers.withoutWorst.totalTrades} · Exp ${a.outliers.withoutWorst.expectancyR ?? "—"}R` : "No comparison"}
+          />
+        </div>
+        <p className="mt-4 text-xs leading-5 text-[var(--muted)]">Removing one record is a sensitivity check, not proof that the record caused the outcome. Shares use gross profit/loss; net P&amp;L and expectancy are recalculated from the remaining sample.</p>
+      </Card>
+      <Card>
         <h2 className="mb-3 font-semibold">Equity</h2>
         <EquityChart data={a.equity} currency={ws.currency} />
       </Card>

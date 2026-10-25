@@ -12,6 +12,7 @@ export const emptyFilters: FilterState = {
   strategyId: "",
   direction: "",
   session: "",
+  reviewStatus: "",
 };
 
 type Account = { id: string; name: string; currency: string; currentBalance: string; startingBalance: string };
@@ -63,6 +64,10 @@ export function useWorkspace() {
       apiJson<any>(`/api/trades?page=${page}&limit=25&${qs}&${extra}`, { signal }),
     [qs],
   );
+  const loadReviewQueue = useCallback(
+    (signal?: AbortSignal) => apiJson<any>(`/api/reviews?${qs}`, { signal }),
+    [qs],
+  );
 
   const selectedAccount = accounts.find((account) => account.id === filters.accountId);
   const commonAccountCurrency = accounts.length > 0 && accounts.every(
@@ -84,5 +89,6 @@ export function useWorkspace() {
     qs,
     loadAnalytics,
     loadTrades,
+    loadReviewQueue,
   };
 }

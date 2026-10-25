@@ -54,6 +54,7 @@ export function parseFilters(url: URL): TradeFilters {
     strategyId: url.searchParams.get("strategyId"),
     direction: url.searchParams.get("direction"),
     session: url.searchParams.get("session"),
+    reviewStatus: url.searchParams.get("reviewStatus"),
     dateField: url.searchParams.get("dateField") === "exit" ? "exit" : "entry",
   };
 }

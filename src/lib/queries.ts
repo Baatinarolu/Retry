@@ -19,6 +19,7 @@ export type TradeFilters = {
   strategyId?: string | null;
   direction?: string | null;
   session?: string | null;
+  reviewStatus?: string | null;
   dateField?: "entry" | "exit" | null;
 };
 
@@ -37,6 +38,11 @@ export function tradeWhere(userId: string, filters: TradeFilters = {}, timeZone 
   }
   if (filters.direction) parts.push(eq(trades.direction, filters.direction));
   if (filters.session) parts.push(eq(trades.session, filters.session));
+  if (filters.reviewStatus) {
+    if (["unreviewed", "reviewed", "needs_follow_up"].includes(filters.reviewStatus)) {
+      parts.push(eq(trades.reviewStatus, filters.reviewStatus));
+    } else invalid = true;
+  }
   const dateColumn = filters.dateField === "exit" ? trades.realizedAt : trades.entryAt;
   if (filters.from) {
     if (isCalendarDate(filters.from)) {

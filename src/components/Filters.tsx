@@ -11,6 +11,7 @@ export type FilterState = {
   strategyId: string;
   direction: string;
   session: string;
+  reviewStatus: string;
 };
 
 export function filterQuery(f: FilterState) {
@@ -36,7 +37,7 @@ export function Filters({
 }) {
   const set = (k: keyof FilterState, v: string) => onChange({ ...value, [k]: v });
   return (
-    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-8">
       <Field label="From">
         <Input type="date" value={value.from} onChange={(e) => set("from", e.target.value)} />
       </Field>
@@ -88,6 +89,14 @@ export function Filters({
               {s.label}
             </option>
           ))}
+        </Select>
+      </Field>
+      <Field label="Review">
+        <Select value={value.reviewStatus} onChange={(e) => set("reviewStatus", e.target.value)}>
+          <option value="">All review states</option>
+          <option value="unreviewed">Unreviewed</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="needs_follow_up">Needs follow-up</option>
         </Select>
       </Field>
     </div>

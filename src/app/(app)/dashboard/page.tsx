@@ -12,10 +12,11 @@ import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
   const ws = useWorkspace();
-  const { loading: workspaceLoading, loadAnalytics, loadTrades } = ws;
+  const { loading: workspaceLoading, loadAnalytics, loadTrades, loadReviewQueue } = ws;
   const [data, setData] = useState<{ analytics?: any; sampleSize?: number } | null>(null);
   const [recent, setRecent] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
+  const [reviewData, setReviewData] = useState<any>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -25,11 +26,13 @@ export default function DashboardPage() {
       loadAnalytics(controller.signal),
       loadTrades(1, "", controller.signal),
       apiJson<{ entries?: any[] }>("/api/journal", { signal: controller.signal }),
+      loadReviewQueue(controller.signal),
     ])
-      .then(([analytics, trades, journal]) => {
+      .then(([analytics, trades, journal, reviews]) => {
         setData(analytics);
         setRecent(trades.trades || []);
         setNotes((journal.entries || []).slice(0, 4));
+        setReviewData(reviews);
         setError("");
       })
       .catch((cause: unknown) => {
@@ -38,7 +41,7 @@ export default function DashboardPage() {
         }
       });
     return () => controller.abort();
-  }, [workspaceLoading, loadAnalytics, loadTrades]);
+  }, [workspaceLoading, loadAnalytics, loadTrades, loadReviewQueue]);
 
   if (workspaceLoading || !data) {
     return ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : <Spinner label="Calculating live statistics" />;
@@ -46,11 +49,14 @@ export default function DashboardPage() {
   const s = data.analytics?.stats;
   if (!s || s.totalTrades === 0) {
     return (
-      <Empty
-        title="No trades in this filter"
-        body="Statistics are computed from stored records only. Add a trade or open the labeled demo journal."
-        action={<Link href="/trades/new" className="btn btn-primary">Add trade</Link>}
-      />
+      <div className="space-y-7">
+        <Empty
+          title="No closed trades in this filter"
+          body="Statistics are computed from stored records only. Add a trade or open the labeled demo journal."
+          action={<Link href="/trades/new" className="btn btn-primary">Add trade</Link>}
+        />
+        {reviewData?.queueTotal ? <ReviewQueueCard reviewData={reviewData} /> : null}
+      </div>
     );
   }
 
@@ -149,6 +155,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      <ReviewQueueCard reviewData={reviewData} />
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Card><div className="card-heading"><h2>Best trades</h2><span>By net result</span></div><TradeMini rows={data.analytics.best} currency={ws.currency} /></Card>
         <Card><div className="card-heading"><h2>Worst trades</h2><span>By net result</span></div><TradeMini rows={data.analytics.worst} currency={ws.currency} /></Card>
@@ -167,6 +175,36 @@ export default function DashboardPage() {
         </ul>
       </Card>
     </div>
+  );
+}
+
+function ReviewQueueCard({ reviewData }: { reviewData: any }) {
+  return (
+    <Card>
+      <div className="card-heading">
+        <div><p className="eyebrow mb-2">Process follow-through</p><h2>Review queue</h2></div>
+        <span>{reviewData?.queueTotal ?? 0} open</span>
+      </div>
+      <p className="mb-3 text-xs text-[var(--muted)]">{reviewData?.counts.reviewed ?? 0} reviewed of {reviewData?.sampleTotal ?? 0} trades in this filter</p>
+      {reviewData?.queue?.length ? (
+        <ul className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+          {reviewData.queue.slice(0, 6).map((trade: any) => (
+            <li key={trade.id}>
+              <Link href={`/trades/${trade.id}`} className="block border-l border-[var(--line-strong)] pl-4 transition-colors hover:border-[var(--accent)]">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium">{trade.instrument} <span className="font-normal text-[var(--muted)]">/ {trade.direction}</span></p>
+                  <span className="badge">{trade.reviewStatus === "needs_follow_up" ? "Follow-up" : "Unreviewed"}</span>
+                </div>
+                <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{trade.displayId}</p>
+                <p className="mt-2 line-clamp-2 text-sm leading-5 text-[var(--muted)]">{trade.nextAction || "Open the trade to record a next-time action."}</p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">{reviewData?.sampleTotal ? "All trades in this filter are reviewed." : "No trades in this filter."}</p>
+      )}
+    </Card>
   );
 }
 
