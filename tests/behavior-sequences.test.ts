@@ -26,6 +26,21 @@ function trade(
   };
 }
 
+function timedTrade(
+  id: string,
+  result: "win" | "loss",
+  netPnl: string,
+  rMultiple: string,
+  entryAt: string,
+  realizedAt: string,
+): BehaviorTrade {
+  return trade(id, result, netPnl, rMultiple, 0, {
+    entryAt: new Date(entryAt),
+    exitAt: new Date(realizedAt),
+    realizedAt: new Date(realizedAt),
+  });
+}
+
 test("behavior sequences use the next realization and compare complementary samples", () => {
   const sequences = buildBehaviorSequences([
     trade("a", "loss", "-10", "-1", 0, { followedPlan: false }),
@@ -59,7 +74,34 @@ test("open trades are excluded and tagged sequences remain explicit", () => {
     trade("d", "win", "10", "1", 4),
   ]);
   assert.equal(sequences.find((sequence) => sequence.key === "after-fomo")?.averagePnl, "20.0000");
+  assert.equal(sequences.find((sequence) => sequence.key === "after-fomo")?.nextPosition?.averagePnl, "20.0000");
   assert.equal(sequences.find((sequence) => sequence.key === "after-revenge")?.averagePnl, "10.0000");
   assert.equal(sequences.find((sequence) => sequence.key === "after-early-exit"), undefined);
   assert.deepEqual(buildBehaviorSequences([trade("only", "win", "1", "1", 0)]), []);
+});
+
+test("position sequences skip overlapping positions and compare complementary samples", () => {
+  const sequences = buildBehaviorSequences([
+    timedTrade("a", "loss", "-10", "-1", "2026-01-01T09:00:00Z", "2026-01-01T10:00:00Z"),
+    timedTrade("b", "win", "20", "2", "2026-01-01T09:30:00Z", "2026-01-01T11:00:00Z"),
+    timedTrade("c", "win", "10", "1", "2026-01-01T10:30:00Z", "2026-01-01T12:00:00Z"),
+    timedTrade("d", "loss", "-5", "-0.5", "2026-01-01T12:30:00Z", "2026-01-01T13:00:00Z"),
+  ]);
+  const afterLoss = sequences.find((sequence) => sequence.key === "after-loss");
+  assert.equal(afterLoss?.averageR, 2);
+  assert.equal(afterLoss?.nextPosition?.sampleSize, 1);
+  assert.equal(afterLoss?.nextPosition?.averageR, 1);
+  assert.equal(afterLoss?.nextPositionComparison?.sampleSize, 2);
+  assert.equal(afterLoss?.nextPositionComparison?.averageR, -0.5);
+});
+
+test("position sequences exclude equal entry and realization timestamps as ambiguous", () => {
+  const sequences = buildBehaviorSequences([
+    timedTrade("a", "loss", "-10", "-1", "2026-01-01T09:00:00Z", "2026-01-01T10:00:00Z"),
+    timedTrade("b", "win", "20", "2", "2026-01-01T10:00:00Z", "2026-01-01T11:00:00Z"),
+    timedTrade("c", "win", "10", "1", "2026-01-01T10:01:00Z", "2026-01-01T12:00:00Z"),
+  ]);
+  const afterLoss = sequences.find((sequence) => sequence.key === "after-loss");
+  assert.equal(afterLoss?.averageR, 2);
+  assert.equal(afterLoss?.nextPosition?.averageR, 1);
 });
