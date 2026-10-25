@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx --test tests/integration/*.test.ts",
     "test:watch": "tsx --test --watch tests/*.test.ts",
     "check": "npm run typecheck && npm run lint && npm test",
     "assets:generate": "node scripts/generate-assets.mjs",

@@ -1,0 +1,5 @@
+trade_id,symbol,side,market_category,contract_size,tick_size,tick_value,execution_type,fill_price,fill_quantity,fill_time,execution_fees,total_commission
+ES-20261022,ES,buy,futures,50,0.25,12.5,entry,5000,2,2026-10-22T14:00:00Z,1.00,3.00
+ES-20261022,ES,buy,futures,50,0.25,12.5,scale_in,5002,1,2026-10-22T14:03:00Z,1.00,3.00
+ES-20261022,ES,buy,futures,50,0.25,12.5,scale_out,5008,1,2026-10-22T14:10:00Z,0.50,3.00
+ES-20261022,ES,buy,futures,50,0.25,12.5,exit,5010,2,2026-10-22T14:20:00Z,0.50,3.00

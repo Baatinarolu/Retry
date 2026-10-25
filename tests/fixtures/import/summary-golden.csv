@@ -1,0 +1,3 @@
+symbol,side,open_time,close_time,open_price,close_price,volume,commission,swap,profit,ticket,strategy,comment
+EURUSD,buy,2026-10-20T08:15:00Z,2026-10-20T09:05:00Z,1.08420,1.08600,1.5,3.50,-0.25,264.25,BRK-1001,London breakout,"London open, clean follow-through"
+USDJPY,sell,2026-10-21T13:30:00Z,2026-10-21T14:10:00Z,151.250,150.980,0.75,2.25,0,145.50,BRK-1002,New York reversal,"Failed breakout"

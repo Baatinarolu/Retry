@@ -80,8 +80,11 @@ For a deployed app, `OLLAMA_BASE_URL` must point to an Ollama server reachable f
 ```bash
 npm run check       # TypeScript + ESLint + regression tests
 npm run build       # Production Next.js build
-npm test            # Calculation, CSV, and validation tests
+npm test            # Calculation, CSV, golden-file, and validation tests
+TRADEMIND_TEST_DATABASE_URL=... npm run test:integration  # Opt-in real PostgreSQL checks
 ```
+
+The two committed import fixtures under `tests/fixtures/import/` pin canonical summary and execution preparation, including source hashes and scaled fills. The integration suite is skipped without `TRADEMIND_TEST_DATABASE_URL`; when enabled it applies every checked-in migration to a **dedicated disposable test database**, then verifies concurrent rate-limit atomicity and hashed keys. Never point it at production or the application's configured database. It is not a substitute for a production migration/restore drill.
 
 The build needs `DATABASE_URL` at module initialization. Use a real database URL in deployment; no database connection is needed for the purely unit-tested calculation modules.
 
@@ -92,7 +95,8 @@ The build needs `DATABASE_URL` at module initialization. Use a real database URL
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build / server |
 | `npm run lint` / `npm run typecheck` | Static checks |
-| `npm test` / `npm run test:watch` | Regression tests |
+| `npm test` / `npm run test:watch` | Regression and golden-file tests |
+| `npm run test:integration` | Opt-in tests against a dedicated PostgreSQL test database |
 | `npm run db:generate` | Generate a Drizzle migration from schema changes |
 | `npm run db:migrate` | Apply checked-in migrations |
 | `npm run db:push` | Push the schema directly during local development |

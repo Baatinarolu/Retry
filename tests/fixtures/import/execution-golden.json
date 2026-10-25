@@ -1,0 +1,114 @@
+{
+  "preview": [
+    {
+      "line": 2,
+      "data": {
+        "instrument": "ES",
+        "direction": "buy",
+        "contractSize": "50",
+        "tickSize": "0.25",
+        "tickValue": "12.5",
+        "totalCommission": "3.00",
+        "marketCategory": "futures",
+        "sourceId": "ES-20261022",
+        "executionType": "entry",
+        "executionPrice": "5000",
+        "executionQuantity": "2",
+        "executedAt": "2026-10-22T14:00:00Z",
+        "executionFees": "1.00"
+      },
+      "errors": [],
+      "duplicate": false
+    }
+  ],
+  "payloads": [
+    {
+      "payload": {
+        "accountId": "00000000-0000-4000-8000-000000000001",
+        "strategyId": null,
+        "instrument": "ES",
+        "marketCategory": "futures",
+        "direction": "long",
+        "tradeType": "intraday",
+        "session": "other",
+        "timezone": "UTC",
+        "entryAt": "2026-10-22T14:00:00Z",
+        "exitAt": null,
+        "entryPrice": null,
+        "exitPrice": null,
+        "stopLoss": null,
+        "takeProfit": null,
+        "positionSize": null,
+        "lotSize": null,
+        "contractSize": "50",
+        "tickSize": "0.25",
+        "tickValue": "12.5",
+        "pipSize": "0.0001",
+        "pipValue": "10",
+        "commission": "3.00",
+        "swap": "0",
+        "slippage": "0",
+        "overrideNetPnl": null,
+        "pnlOverridden": false,
+        "status": "closed",
+        "marketBias": "",
+        "htfDirection": "",
+        "entryTimeframe": "15m",
+        "htfTimeframe": "4h",
+        "marketStructure": "",
+        "entryModel": "",
+        "confluence": "",
+        "entryReason": "",
+        "slJustification": "",
+        "tpJustification": "",
+        "invalidation": "",
+        "plannedExit": "",
+        "followedPlan": true,
+        "newsRelated": false,
+        "notes": "Imported from CSV",
+        "tagIds": [],
+        "executions": [
+          {
+            "type": "entry",
+            "price": "5000",
+            "quantity": "2",
+            "executedAt": "2026-10-22T14:00:00Z",
+            "fees": "1.00",
+            "notes": "Imported line 2"
+          },
+          {
+            "type": "scale_in",
+            "price": "5002",
+            "quantity": "1",
+            "executedAt": "2026-10-22T14:03:00Z",
+            "fees": "1.00",
+            "notes": "Imported line 3"
+          },
+          {
+            "type": "scale_out",
+            "price": "5008",
+            "quantity": "1",
+            "executedAt": "2026-10-22T14:10:00Z",
+            "fees": "0.50",
+            "notes": "Imported line 4"
+          },
+          {
+            "type": "exit",
+            "price": "5010",
+            "quantity": "2",
+            "executedAt": "2026-10-22T14:20:00Z",
+            "fees": "0.50",
+            "notes": "Imported line 5"
+          }
+        ],
+        "sourceKey": "id:ES-20261022",
+        "sourceHash": "abc594d459e8cfd965f874219bd425803a2bc344bdf00c9edf28290789318dd7"
+      },
+      "line": 2
+    }
+  ],
+  "valid": 1,
+  "rejected": 0,
+  "sourceRows": 4,
+  "executionMode": true
+}
