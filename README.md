@@ -5,8 +5,9 @@ A private, multi-account trading journal built with Next.js, Neon PostgreSQL, Dr
 ## What is included
 
 - **Trade journal:** long/short trades, contract/tick/pip specifications, fees, partial fills, tags, strategy links, notes, and psychology records.
-- **Correct realized metrics:** open trades are excluded from closed-trade win rate, expectancy, drawdown, and equity statistics.
-- **Atomic account updates:** trade create/edit/move/delete operations update account balances and related records in database transactions.
+- **Execution-led reconciliation:** when fills are supplied, weighted-average entries/exits, realized P&L, remaining quantity, fees, R, and holding time are derived from those fills rather than duplicated summary fields. Invalid over-exits, early exits, reopening, and status mismatches are rejected.
+- **Correct realized metrics:** open trades are excluded from closed-trade win rate, expectancy, drawdown, and equity statistics. Realized P&L from a partially closed open trade still updates its account balance.
+- **Deterministic account ledger:** create/edit/move/delete operations rebuild balances and historical before/after snapshots from the account's starting balance plus realized trade P&L in database transactions.
 - **Risk workspace:** per-account daily/weekly loss limits, trade and loss-streak limits, open-risk limits, position limits, R:R checks, and daily targets.
 - **Analysis and review:** dashboard, breakdowns, calendar, reports, strategy statistics, and separate R-based simulated backtests.
 - **Data portability:** validated CSV previews, duplicate detection, spreadsheet-safe CSV exports, and JSON trade export.
@@ -141,7 +142,8 @@ A ready-to-use workflow template is included at `docs/db-migrate.yml`. It runs o
 - **Uploads:** Vercel uses a private Blob store automatically. Outside Vercel, screenshots use `data/uploads` unless Blob credentials are configured; back up that directory and use a persistent volume for self-hosting.
 - **Rate limits:** the built-in limiter is process-local. Use a shared Redis/database limiter at the edge when running multiple instances.
 - **Demo mode:** the demo is a shared sample workspace. Its UI warns users not to enter private data; isolate or make it read-only for a public deployment.
-- **Reporting:** use an account filter when accounts have different currencies. Automatic FX conversion and user-timezone period boundaries remain separate feature work; current cross-account totals are raw numeric sums and period boundaries are UTC.
+- **Execution ledger:** weighted-average cost is currently used within a same-direction trade. A flat trade cannot be reopened; start a new trade for the next round trip. Reversals and stop/target change history remain separate feature work. Existing execution-based records retain their prior values until they are next saved; new and edited records reconcile from fills.
+- **Reporting:** use an account filter when accounts have different currencies. Automatic FX conversion and user-timezone period boundaries remain separate feature work; current cross-account totals are raw numeric sums and period boundaries are UTC. Closed-trade analytics intentionally exclude positions that remain open, including any partially realized amount already reflected in the account balance.
 - **Environment:** The project owner has chosen to track `.env` in this repository. Everyone with repository access can read and use the included database and session credentials.
 
 ## Security and dependency status

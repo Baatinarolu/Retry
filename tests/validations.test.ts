@@ -44,6 +44,21 @@ test("manual P&L override must include a finite value", () => {
   );
 });
 
+test("execution-led trades do not require duplicate summary prices or exit fields", () => {
+  const result = tradeSchema.safeParse({
+    ...validTrade,
+    entryPrice: "",
+    exitPrice: "",
+    exitAt: null,
+    executions: [
+      { type: "entry", price: "100", quantity: "1", executedAt: "2026-01-01T10:00:00.000Z" },
+      { type: "exit", price: "105", quantity: "1", executedAt: "2026-01-01T11:00:00.000Z" },
+    ],
+  });
+  assert.equal(result.success, true);
+  assert.equal(tradeSchema.safeParse({ ...validTrade, entryPrice: "" }).success, false);
+});
+
 test("calendar dates and zero-valued risk limits validate correctly", () => {
   assert.equal(journalSchema.safeParse({ journalDate: "2026-02-29" }).success, false);
   assert.equal(journalSchema.safeParse({ journalDate: "2026-02-28" }).success, true);

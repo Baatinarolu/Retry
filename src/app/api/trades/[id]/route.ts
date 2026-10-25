@@ -11,7 +11,7 @@ import {
 import { jsonError, requireUser } from "@/lib/api";
 import { deleteTrade, updateTrade } from "@/lib/trade-service";
 import { tradeSchema } from "@/lib/validations";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     .from(tradeTags)
     .innerJoin(tags, eq(tags.id, tradeTags.tagId))
     .where(eq(tradeTags.tradeId, id));
-  const executions = await db.select().from(tradeExecutions).where(eq(tradeExecutions.tradeId, id));
+  const executions = await db
+    .select()
+    .from(tradeExecutions)
+    .where(eq(tradeExecutions.tradeId, id))
+    .orderBy(asc(tradeExecutions.executedAt), asc(tradeExecutions.id));
   const shots = await db.select().from(screenshots).where(eq(screenshots.tradeId, id));
   return NextResponse.json({
     trade: {

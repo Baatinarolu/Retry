@@ -69,6 +69,27 @@ export default function TradeDetailPage() {
         <Stat label="Result" value={<span className="capitalize">{trade.result}</span>} />
         <Stat label="Plan" value={trade.followedPlan ? "Followed" : "Broke"} />
       </div>
+      {trade.executions?.length ? (
+        <section className="card overflow-hidden">
+          <div className="card-heading px-5 pt-5"><h2>Execution ledger</h2><span>{trade.executions.length} fills</span></div>
+          <div className="table-wrap mt-4">
+            <table className="data">
+              <thead><tr><th>Type</th><th>Time</th><th>Price</th><th>Quantity</th><th>Fees</th></tr></thead>
+              <tbody>
+                {trade.executions.map((execution: any) => (
+                  <tr key={execution.id}>
+                    <td className="capitalize">{execution.type.replace("_", " ")}</td>
+                    <td>{formatWhen(execution.executedAt)}</td>
+                    <td className="font-mono-num">{execution.price}</td>
+                    <td className="font-mono-num">{execution.quantity}</td>
+                    <td className="font-mono-num">{formatMoney(execution.fees)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       {trade.notes ? <aside className="paper-docket p-6 sm:p-8"><p className="eyebrow mb-3">Trader&apos;s note</p><p className="max-w-4xl font-serif text-xl leading-8">{trade.notes}</p></aside> : null}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {(trade.screenshots || []).map((screenshot: any) => (

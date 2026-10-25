@@ -10,6 +10,7 @@ import {
   TRADE_TYPES,
 } from "@/lib/constants";
 import { computeTradeMetrics } from "@/lib/calculations";
+import { calculateExecutionLedger } from "@/lib/execution-ledger";
 import { formatMoney, formatR } from "@/lib/format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
@@ -274,7 +275,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
     }));
   }
 
-  const metrics = useMemo(
+  const summaryMetrics = useMemo(
     () =>
       computeTradeMetrics({
         direction: form.direction as "long" | "short",
@@ -299,6 +300,35 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
     [form],
   );
 
+  const executionPreview = useMemo(() => {
+    if (!executions.length) return { ledger: null, error: "" };
+    try {
+      return {
+        ledger: calculateExecutionLedger({
+          direction: form.direction as "long" | "short",
+          status: form.status as "open" | "closed",
+          executions,
+          stopLoss: form.stopLoss,
+          takeProfit: form.takeProfit,
+          contractSize: form.contractSize,
+          tickSize: form.tickSize,
+          tickValue: form.tickValue,
+          pipSize: form.pipSize,
+          pipValue: form.pipValue,
+          commission: form.commission,
+          swap: form.swap,
+          slippage: form.slippage,
+          overrideNetPnl: form.pnlOverridden ? form.overrideNetPnl : null,
+        }),
+        error: "",
+      };
+    } catch (cause) {
+      return { ledger: null, error: cause instanceof Error ? cause.message : "Invalid executions" };
+    }
+  }, [executions, form]);
+  const metrics = executionPreview.ledger?.metrics ?? summaryMetrics;
+  const positionSizeForRisk = executionPreview.ledger?.positionSize ?? (form.positionSize || form.lotSize);
+
   useEffect(() => {
     if (!form.accountId || !metrics.initialRisk) return;
     const t = setTimeout(() => {
@@ -309,7 +339,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
           accountId: form.accountId,
           plannedRisk: Number(metrics.initialRisk),
           plannedRr: Number(metrics.plannedRr || 0),
-          positionSize: Number(form.positionSize || form.lotSize || 0),
+          positionSize: Number(positionSizeForRisk || 0),
         }),
       })
         .then((r) => r.json())
@@ -317,7 +347,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
         .catch(() => undefined);
     }, 400);
     return () => clearTimeout(t);
-  }, [form.accountId, form.positionSize, form.lotSize, metrics.initialRisk, metrics.plannedRr]);
+  }, [form.accountId, positionSizeForRisk, metrics.initialRisk, metrics.plannedRr]);
 
   function persistDraft() {
     try {
@@ -340,7 +370,8 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
     }
     setSaving(true);
     try {
-      if (form.status === "closed" && (!form.exitAt || !form.exitPrice)) {
+      if (executionPreview.error) throw new Error(executionPreview.error);
+      if (!executions.length && form.status === "closed" && (!form.exitAt || !form.exitPrice)) {
         throw new Error("Closed trades need an exit time and exit price.");
       }
       const payload = {
@@ -501,15 +532,21 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
               </Select>
             </Field>
             <Field label="Entry">
-              <Input type="datetime-local" value={form.entryAt} onChange={(e) => set("entryAt", e.target.value)} required />
+              <Input
+                type="datetime-local"
+                value={executionPreview.ledger ? toLocalInput(executionPreview.ledger.entryAt) : form.entryAt}
+                onChange={(e) => set("entryAt", e.target.value)}
+                disabled={executions.length > 0}
+                required
+              />
             </Field>
             <Field label="Exit">
               <Input
                 type="datetime-local"
-                value={form.exitAt}
+                value={executionPreview.ledger ? (executionPreview.ledger.exitAt ? toLocalInput(executionPreview.ledger.exitAt) : "") : form.exitAt}
                 onChange={(e) => set("exitAt", e.target.value)}
-                disabled={form.status === "open"}
-                required={form.status === "closed"}
+                disabled={form.status === "open" || executions.length > 0}
+                required={form.status === "closed" && executions.length === 0}
               />
             </Field>
             <Field label="Status">
@@ -521,14 +558,20 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
           </div>
           <div className="grid gap-3 md:grid-cols-4">
             <Field label="Entry price">
-              <Input value={form.entryPrice} onChange={(e) => set("entryPrice", e.target.value)} required />
+              <Input
+                value={executionPreview.ledger?.entryPrice ?? form.entryPrice}
+                onChange={(e) => set("entryPrice", e.target.value)}
+                readOnly={executions.length > 0}
+                required={executions.length === 0}
+              />
             </Field>
             <Field label="Exit price">
               <Input
                 inputMode="decimal"
-                value={form.exitPrice}
+                value={executionPreview.ledger ? (executionPreview.ledger.exitPrice ?? "") : form.exitPrice}
                 onChange={(e) => set("exitPrice", e.target.value)}
-                required={form.status === "closed"}
+                readOnly={executions.length > 0}
+                required={form.status === "closed" && executions.length === 0}
               />
             </Field>
             <Field label="Stop loss">
@@ -538,7 +581,11 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
               <Input value={form.takeProfit} onChange={(e) => set("takeProfit", e.target.value)} />
             </Field>
             <Field label="Lot / contracts">
-              <Input value={form.lotSize} onChange={(e) => { set("lotSize", e.target.value); set("positionSize", e.target.value); }} />
+              <Input
+                value={executionPreview.ledger?.positionSize ?? form.lotSize}
+                onChange={(e) => { set("lotSize", e.target.value); set("positionSize", e.target.value); }}
+                readOnly={executions.length > 0}
+              />
             </Field>
             <Field label="Commission">
               <Input value={form.commission} onChange={(e) => set("commission", e.target.value)} />
@@ -573,7 +620,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
 
         <aside className="card h-fit space-y-3 p-5">
           <div className="card-heading"><h2>Calculator</h2><span>Live preview</span></div>
-          <p className="text-xs text-[var(--muted)]">Uses your contract spec. Override if the broker fill differs.</p>
+          <p className="text-xs text-[var(--muted)]">{executionPreview.ledger ? "Reconciled from your fills and contract specification." : "Uses your contract spec. Override if the broker result differs."}</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Gross</p><p className="font-mono-num">{formatMoney(metrics.grossPnl, currency)}</p></div>
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Net</p><p className="font-mono-num">{formatMoney(metrics.netPnl, currency)}</p></div>
@@ -642,7 +689,17 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
 
       <section className="card space-y-4 p-5">
         <div className="card-heading"><h2>Partials &amp; scaling</h2><span>03 / Executions</span></div>
-        <p className="text-sm text-[var(--muted)]">Record multiple entries or scale-outs. These do not auto-recalculate blended P&amp;L unless you override net P&amp;L.</p>
+        <p className="text-sm text-[var(--muted)]">
+          Fills drive blended entry/exit prices, quantities, realized P&amp;L, and holding time. Summary fields become read-only while fills are present.
+        </p>
+        {executionPreview.error ? <Banner tone="warn">{executionPreview.error}</Banner> : null}
+        {executionPreview.ledger ? (
+          <div className="card-quiet grid gap-2 p-3 text-xs text-[var(--muted)] sm:grid-cols-3">
+            <span>Open quantity <strong className="text-[var(--text)]">{executionPreview.ledger.remainingQuantity}</strong></span>
+            <span>Blended entry <strong className="text-[var(--text)]">{executionPreview.ledger.entryPrice}</strong></span>
+            <span>Blended exit <strong className="text-[var(--text)]">{executionPreview.ledger.exitPrice ?? "—"}</strong></span>
+          </div>
+        ) : null}
         {executions.map((ex, i) => (
           <div key={i} className="grid gap-2 md:grid-cols-6">
             <Select value={ex.type} onChange={(e) => setExecutions((xs) => xs.map((x, idx) => idx === i ? { ...x, type: e.target.value as typeof ex.type } : x))}>
@@ -658,7 +715,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
             <Button type="button" variant="ghost" onClick={() => setExecutions((xs) => xs.filter((_, idx) => idx !== i))}>Remove</Button>
           </div>
         ))}
-        <Button type="button" variant="ghost" onClick={() => setExecutions((xs) => [...xs, { type: "scale_out", price: "", quantity: "", executedAt: localNow(), fees: "0", notes: "" }])}>
+        <Button type="button" variant="ghost" onClick={() => setExecutions((xs) => [...xs, { type: xs.length ? "scale_out" : "entry", price: "", quantity: "", executedAt: localNow(), fees: "0", notes: "" }])}>
           Add fill
         </Button>
       </section>

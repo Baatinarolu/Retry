@@ -1,8 +1,8 @@
 import { db } from "@/db";
-import { riskSettings, tradingAccounts } from "@/db/schema";
+import { riskSettings, tradingAccounts, users } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
+import { rebuildAccountBalances } from "@/lib/trade-service";
 import { accountSchema } from "@/lib/validations";
-import Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
@@ -54,6 +54,8 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid account");
 
   const account = await db.transaction(async (tx) => {
+    // Match trade writes: one user-level lock protects balances and ledger snapshots.
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, session!.uid)).for("update");
     const [existing] = await tx
       .select()
       .from(tradingAccounts)
@@ -63,10 +65,7 @@ export async function PATCH(req: NextRequest) {
 
     const hasNewStarting = parsed.data.startingBalance !== undefined && parsed.data.startingBalance !== "";
     const starting = hasNewStarting ? String(parsed.data.startingBalance) : existing.startingBalance;
-    const current = hasNewStarting
-      ? new Decimal(existing.currentBalance).plus(new Decimal(starting).minus(existing.startingBalance)).toFixed(2)
-      : existing.currentBalance;
-    const [updated] = await tx
+    await tx
       .update(tradingAccounts)
       .set({
         name: parsed.data.name ?? existing.name,
@@ -76,11 +75,11 @@ export async function PATCH(req: NextRequest) {
         notes: parsed.data.notes ?? existing.notes,
         isActive: parsed.data.isActive ?? existing.isActive,
         startingBalance: starting,
-        currentBalance: current,
         updatedAt: new Date(),
       })
-      .where(eq(tradingAccounts.id, existing.id))
-      .returning();
+      .where(eq(tradingAccounts.id, existing.id));
+    await rebuildAccountBalances(tx, existing.id);
+    const [updated] = await tx.select().from(tradingAccounts).where(eq(tradingAccounts.id, existing.id));
     return updated;
   });
 

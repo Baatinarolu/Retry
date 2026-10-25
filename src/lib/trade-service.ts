@@ -10,9 +10,10 @@ import {
   tradingAccounts,
   users,
 } from "@/db/schema";
-import Decimal from "decimal.js";
 import { and, eq, inArray } from "drizzle-orm";
+import { buildAccountBalanceSnapshots } from "./accounting";
 import { computeTradeMetrics, type Direction } from "./calculations";
+import { calculateExecutionLedger, type ExecutionLedger } from "./execution-ledger";
 import { deleteScreenshotFiles } from "./screenshot-storage";
 
 export type TradePayload = {
@@ -155,6 +156,35 @@ async function nextDisplayId(tx: Tx, userId: string) {
 }
 
 function calculate(payload: TradePayload) {
+  if (payload.pnlOverridden && blank(payload.overrideNetPnl)) throw new Error("Manual net P&L is required");
+
+  if (payload.executions?.length) {
+    const ledger = calculateExecutionLedger({
+      direction: payload.direction,
+      status: payload.status ?? "closed",
+      executions: payload.executions,
+      stopLoss: payload.stopLoss,
+      takeProfit: payload.takeProfit,
+      contractSize: payload.contractSize,
+      tickSize: payload.tickSize,
+      tickValue: payload.tickValue,
+      pipSize: payload.pipSize,
+      pipValue: payload.pipValue,
+      commission: payload.commission,
+      swap: payload.swap,
+      slippage: payload.slippage,
+      overrideNetPnl: payload.pnlOverridden ? payload.overrideNetPnl : null,
+    });
+    return {
+      closed: ledger.status === "closed",
+      executionBased: true,
+      entryAt: ledger.entryAt,
+      exitAt: ledger.exitAt,
+      metrics: ledger.metrics,
+      ledger,
+    };
+  }
+
   const closed = payload.status !== "open";
   const entryAt = new Date(payload.entryAt);
   if (Number.isNaN(entryAt.getTime())) throw new Error("Invalid entry time");
@@ -165,7 +195,6 @@ function calculate(payload: TradePayload) {
   if (exitAt && Number.isNaN(exitAt.getTime())) throw new Error("Invalid exit time");
   if (exitAt && exitAt < entryAt) throw new Error("Exit time cannot be before entry time");
   if (closed && blank(payload.exitPrice)) throw new Error("Closed trades require an exit price");
-  if (payload.pnlOverridden && blank(payload.overrideNetPnl)) throw new Error("Manual net P&L is required");
 
   const metrics = computeTradeMetrics({
     direction: payload.direction as Direction,
@@ -187,14 +216,14 @@ function calculate(payload: TradePayload) {
     entryAt,
     exitAt,
   });
-  return { closed, entryAt, exitAt, metrics };
+  return { closed, executionBased: false, entryAt, exitAt, metrics, ledger: null };
 }
 
 function valuesFor(
   payload: TradePayload,
   calculated: ReturnType<typeof calculate>,
 ): Omit<typeof trades.$inferInsert, "userId" | "accountId" | "displayId" | "balanceBefore" | "balanceAfter"> {
-  const { closed, entryAt, exitAt, metrics } = calculated;
+  const { closed, entryAt, exitAt, metrics, ledger, executionBased } = calculated;
   return {
     strategyId: payload.strategyId || null,
     instrument: payload.instrument.trim(),
@@ -205,12 +234,12 @@ function valuesFor(
     timezone: payload.timezone || "UTC",
     entryAt,
     exitAt,
-    entryPrice: str0(payload.entryPrice),
-    exitPrice: closed ? str(payload.exitPrice) : null,
+    entryPrice: ledger?.entryPrice ?? str0(payload.entryPrice),
+    exitPrice: ledger ? ledger.exitPrice : closed ? str(payload.exitPrice) : null,
     stopLoss: str(payload.stopLoss),
     takeProfit: str(payload.takeProfit),
-    positionSize: str0(firstValue(payload.positionSize, payload.lotSize, "1")),
-    lotSize: str0(firstValue(payload.lotSize, payload.positionSize, "1")),
+    positionSize: ledger?.positionSize ?? str0(firstValue(payload.positionSize, payload.lotSize, "1")),
+    lotSize: ledger?.lotSize ?? str0(firstValue(payload.lotSize, payload.positionSize, "1")),
     contractSize: str0(firstValue(payload.contractSize, "1")),
     tickSize: str0(payload.tickSize),
     tickValue: str0(payload.tickValue),
@@ -219,12 +248,12 @@ function valuesFor(
     commission: str0(payload.commission),
     swap: str0(payload.swap),
     slippage: str0(payload.slippage),
-    grossPnl: closed ? metrics.grossPnl : "0",
-    netPnl: closed ? metrics.netPnl : "0",
+    grossPnl: closed || executionBased ? metrics.grossPnl : "0",
+    netPnl: closed || executionBased ? metrics.netPnl : "0",
     initialRisk: metrics.initialRisk,
     plannedRr: metrics.plannedRr,
-    actualRr: closed ? metrics.actualRr : null,
-    rMultiple: closed ? metrics.rMultiple : null,
+    actualRr: closed || executionBased ? metrics.actualRr : null,
+    rMultiple: closed || executionBased ? metrics.rMultiple : null,
     status: closed ? "closed" : "open",
     result: closed ? metrics.result : "be",
     marketBias: payload.marketBias || "",
@@ -243,12 +272,17 @@ function valuesFor(
     newsRelated: payload.newsRelated ?? false,
     notes: payload.notes || "",
     holdingMinutes: closed ? metrics.holdingMinutes : null,
-    pnlOverridden: closed ? (payload.pnlOverridden ?? false) : false,
+    pnlOverridden: closed || executionBased ? (payload.pnlOverridden ?? false) : false,
   };
 }
 
-function executionValues(tradeId: string, userId: string, payload: TradePayload) {
-  return (payload.executions ?? []).map((execution) => ({
+function executionValues(
+  tradeId: string,
+  userId: string,
+  payload: TradePayload,
+  ledger?: ExecutionLedger | null,
+) {
+  return (ledger?.executions ?? payload.executions ?? []).map((execution) => ({
     tradeId,
     userId,
     type: execution.type,
@@ -287,16 +321,68 @@ function psychologyValues(payload: TradePayload) {
   };
 }
 
+export async function rebuildAccountBalances(tx: Tx, accountId: string) {
+  const [account] = await tx
+    .select({ id: tradingAccounts.id, startingBalance: tradingAccounts.startingBalance })
+    .from(tradingAccounts)
+    .where(eq(tradingAccounts.id, accountId));
+  if (!account) throw new Error("Account not found");
+
+  const rows = await tx
+    .select({
+      id: trades.id,
+      netPnl: trades.netPnl,
+      entryAt: trades.entryAt,
+      exitAt: trades.exitAt,
+      createdAt: trades.createdAt,
+      balanceBefore: trades.balanceBefore,
+      balanceAfter: trades.balanceAfter,
+    })
+    .from(trades)
+    .where(eq(trades.accountId, accountId));
+
+  // An open position has no final exitAt, but a scale-out still realizes P&L.
+  // Order its position-level snapshot at the latest reduction, not its entry.
+  const reductions = rows.length
+    ? await tx
+        .select({ tradeId: tradeExecutions.tradeId, executedAt: tradeExecutions.executedAt })
+        .from(tradeExecutions)
+        .innerJoin(trades, eq(trades.id, tradeExecutions.tradeId))
+        .where(and(eq(trades.accountId, accountId), inArray(tradeExecutions.type, ["scale_out", "exit"])))
+    : [];
+  const latestReduction = new Map<string, Date>();
+  for (const reduction of reductions) {
+    const existing = latestReduction.get(reduction.tradeId);
+    if (!existing || reduction.executedAt > existing) latestReduction.set(reduction.tradeId, reduction.executedAt);
+  }
+  const ledgerRows = rows.map((row) => ({ ...row, realizedAt: latestReduction.get(row.id) ?? null }));
+  const { snapshots, currentBalance } = buildAccountBalanceSnapshots(account.startingBalance, ledgerRows);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+
+  for (const snapshot of snapshots) {
+    const existing = byId.get(snapshot.id);
+    if (existing?.balanceBefore === snapshot.balanceBefore && existing.balanceAfter === snapshot.balanceAfter) continue;
+    await tx
+      .update(trades)
+      .set({ balanceBefore: snapshot.balanceBefore, balanceAfter: snapshot.balanceAfter })
+      .where(eq(trades.id, snapshot.id));
+  }
+
+  await tx
+    .update(tradingAccounts)
+    .set({ currentBalance, updatedAt: new Date() })
+    .where(eq(tradingAccounts.id, accountId));
+  return currentBalance;
+}
+
 export async function createTrade(userId: string, payload: TradePayload) {
   const calculated = calculate(payload);
   return db.transaction(async (tx) => {
-    // Serializing writes per user protects both balances and human-readable display IDs.
+    // Serializing writes per user protects balances, ledger snapshots, and display IDs.
     await lockUser(tx, userId);
     const account = await lockAccount(tx, userId, payload.accountId);
     const tagIds = await validateRelations(tx, userId, payload);
     const displayId = await nextDisplayId(tx, userId);
-    const balanceBefore = new Decimal(account.currentBalance);
-    const balanceAfter = calculated.closed ? balanceBefore.plus(calculated.metrics.netPnl) : balanceBefore;
 
     const [trade] = await tx
       .insert(trades)
@@ -305,24 +391,18 @@ export async function createTrade(userId: string, payload: TradePayload) {
         accountId: account.id,
         displayId,
         ...valuesFor(payload, calculated),
-        balanceBefore: balanceBefore.toFixed(2),
-        balanceAfter: balanceAfter.toFixed(2),
       })
       .returning();
 
-    if (calculated.closed) {
-      await tx
-        .update(tradingAccounts)
-        .set({ currentBalance: balanceAfter.toFixed(2), updatedAt: new Date() })
-        .where(eq(tradingAccounts.id, account.id));
-    }
-
-    const executions = executionValues(trade.id, userId, payload);
+    const executions = executionValues(trade.id, userId, payload, calculated.ledger);
     if (executions.length) await tx.insert(tradeExecutions).values(executions);
     if (tagIds.length) await tx.insert(tradeTags).values(tagIds.map((tagId) => ({ tradeId: trade.id, tagId })));
     const psychology = psychologyValues(payload);
     if (psychology) await tx.insert(psychologyRecords).values({ tradeId: trade.id, userId, ...psychology });
-    return trade;
+
+    await rebuildAccountBalances(tx, account.id);
+    const [saved] = await tx.select().from(trades).where(eq(trades.id, trade.id));
+    return saved;
   });
 }
 
@@ -342,50 +422,20 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
       ? oldAccount
       : await lockAccount(tx, userId, payload.accountId);
     const tagIds = await validateRelations(tx, userId, payload);
-    const oldNet = existing.status === "closed" ? new Decimal(existing.netPnl) : new Decimal(0);
-    const newNet = calculated.closed ? new Decimal(calculated.metrics.netPnl) : new Decimal(0);
-    let balanceBefore: Decimal;
-    let balanceAfter: Decimal;
 
-    if (oldAccount.id === destination.id) {
-      const accountWithoutOldTrade = new Decimal(destination.currentBalance).minus(oldNet);
-      const updatedBalance = accountWithoutOldTrade.plus(newNet);
-      balanceBefore = existing.balanceBefore ? new Decimal(existing.balanceBefore) : accountWithoutOldTrade;
-      balanceAfter = calculated.closed ? balanceBefore.plus(newNet) : accountWithoutOldTrade;
-      await tx
-        .update(tradingAccounts)
-        .set({ currentBalance: updatedBalance.toFixed(2), updatedAt: new Date() })
-        .where(eq(tradingAccounts.id, destination.id));
-    } else {
-      const oldBalance = new Decimal(oldAccount.currentBalance).minus(oldNet);
-      balanceBefore = new Decimal(destination.currentBalance);
-      balanceAfter = balanceBefore.plus(newNet);
-      await tx
-        .update(tradingAccounts)
-        .set({ currentBalance: oldBalance.toFixed(2), updatedAt: new Date() })
-        .where(eq(tradingAccounts.id, oldAccount.id));
-      await tx
-        .update(tradingAccounts)
-        .set({ currentBalance: balanceAfter.toFixed(2), updatedAt: new Date() })
-        .where(eq(tradingAccounts.id, destination.id));
-    }
-
-    const [trade] = await tx
+    await tx
       .update(trades)
       .set({
         accountId: destination.id,
         ...valuesFor(payload, calculated),
-        balanceBefore: balanceBefore.toFixed(2),
-        balanceAfter: balanceAfter.toFixed(2),
         updatedAt: new Date(),
       })
-      .where(eq(trades.id, tradeId))
-      .returning();
+      .where(eq(trades.id, tradeId));
 
     await tx.delete(tradeTags).where(eq(tradeTags.tradeId, tradeId));
     if (tagIds.length) await tx.insert(tradeTags).values(tagIds.map((tagId) => ({ tradeId, tagId })));
     await tx.delete(tradeExecutions).where(eq(tradeExecutions.tradeId, tradeId));
-    const executions = executionValues(tradeId, userId, payload);
+    const executions = executionValues(tradeId, userId, payload, calculated.ledger);
     if (executions.length) await tx.insert(tradeExecutions).values(executions);
 
     const psychology = psychologyValues(payload);
@@ -400,7 +450,11 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
         await tx.insert(psychologyRecords).values({ tradeId, userId, ...psychology });
       }
     }
-    return trade;
+
+    await rebuildAccountBalances(tx, oldAccount.id);
+    if (destination.id !== oldAccount.id) await rebuildAccountBalances(tx, destination.id);
+    const [saved] = await tx.select().from(trades).where(eq(trades.id, tradeId));
+    return saved;
   });
 }
 
@@ -414,20 +468,13 @@ export async function deleteTrade(userId: string, tradeId: string) {
       .for("update");
     if (!existing) return null;
 
-    if (existing.status === "closed") {
-      const account = await lockAccount(tx, userId, existing.accountId);
-      const restored = new Decimal(account.currentBalance).minus(existing.netPnl);
-      await tx
-        .update(tradingAccounts)
-        .set({ currentBalance: restored.toFixed(2), updatedAt: new Date() })
-        .where(eq(tradingAccounts.id, account.id));
-    }
-
+    const account = await lockAccount(tx, userId, existing.accountId);
     const shots = await tx
       .select({ fileName: screenshots.fileName })
       .from(screenshots)
       .where(eq(screenshots.tradeId, tradeId));
     await tx.delete(trades).where(eq(trades.id, tradeId));
+    await rebuildAccountBalances(tx, account.id);
     return shots.map((shot) => shot.fileName);
   });
 

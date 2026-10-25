@@ -108,7 +108,7 @@ export const tradeSchema = z
     timezone: z.string().max(80).optional().default("UTC"),
     entryAt: dateTimeString,
     exitAt: optionalDateTimeString,
-    entryPrice: requiredPositive,
+    entryPrice: optionalPositive,
     exitPrice: optionalPositive,
     stopLoss: optionalPositive,
     takeProfit: optionalPositive,
@@ -181,15 +181,19 @@ export const tradeSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
+    const hasExecutions = value.executions.length > 0;
     const hasExitAt = Boolean(value.exitAt);
     const hasExitPrice = !isBlank(value.exitPrice);
-    if (value.status === "closed" && !hasExitAt) {
+    if (!hasExecutions && isBlank(value.entryPrice)) {
+      ctx.addIssue({ code: "custom", path: ["entryPrice"], message: "Entry price is required without executions" });
+    }
+    if (!hasExecutions && value.status === "closed" && !hasExitAt) {
       ctx.addIssue({ code: "custom", path: ["exitAt"], message: "Closed trades require an exit time" });
     }
-    if (value.status === "closed" && !hasExitPrice) {
+    if (!hasExecutions && value.status === "closed" && !hasExitPrice) {
       ctx.addIssue({ code: "custom", path: ["exitPrice"], message: "Closed trades require an exit price" });
     }
-    if (value.exitAt && new Date(value.exitAt).getTime() < new Date(value.entryAt).getTime()) {
+    if (!hasExecutions && value.exitAt && new Date(value.exitAt).getTime() < new Date(value.entryAt).getTime()) {
       ctx.addIssue({ code: "custom", path: ["exitAt"], message: "Exit time cannot be before entry time" });
     }
     if (value.pnlOverridden && isBlank(value.overrideNetPnl)) {
