@@ -21,6 +21,7 @@ const guardedRoutes: Record<string, string[]> = {
   "src/app/api/trades/[id]/review/route.ts": ["PATCH"],
   "src/app/api/trades/[id]/screenshots/route.ts": ["POST"],
   "src/app/api/trades/route.ts": ["POST"],
+  "src/app/api/views/route.ts": ["POST", "PATCH", "DELETE"],
 };
 
 test("every workspace-mutating API handler requires a writable non-demo user", () => {

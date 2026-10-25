@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cashFlowSchema, journalSchema, riskSchema, settingsSchema, signupSchema, tradeReviewSchema, tradeSchema } from "../src/lib/validations";
+import { cashFlowSchema, journalSchema, riskSchema, savedViewSchema, settingsSchema, signupSchema, tradeReviewSchema, tradeSchema } from "../src/lib/validations";
 
 const validTrade = {
   accountId: "123e4567-e89b-42d3-a456-426614174000",
@@ -73,6 +73,23 @@ test("review status requires an actionable follow-up and bounds next-action text
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "needs_follow_up", nextAction: "" }).success, false);
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "needs_follow_up", nextAction: "Reduce size" }).success, true);
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "reviewed", nextAction: "x".repeat(2001) }).success, false);
+});
+
+test("saved views accept only bounded, known filter fields", () => {
+  const valid = savedViewSchema.safeParse({
+    name: "  London review  ",
+    filters: { from: "2026-01-01", direction: "long", reviewStatus: "unreviewed" },
+  });
+  assert.equal(valid.success, true);
+  if (valid.success) {
+    assert.equal(valid.data.name, "London review");
+    assert.equal(valid.data.filters.to, "");
+    assert.equal(valid.data.filters.reviewStatus, "unreviewed");
+  }
+  assert.equal(savedViewSchema.safeParse({ name: "Bad", filters: { direction: "sideways" } }).success, false);
+  assert.equal(savedViewSchema.safeParse({ name: "Bad", filters: { from: "2026-02-29" } }).success, false);
+  assert.equal(savedViewSchema.safeParse({ name: "Bad", filters: { unknown: "value" } }).success, false);
+  assert.equal(savedViewSchema.safeParse({ name: "Bad", filters: { accountId: "not-a-uuid" } }).success, false);
 });
 
 test("cash-flow validation separates positive cash events from signed adjustments", () => {

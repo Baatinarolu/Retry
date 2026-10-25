@@ -225,6 +225,26 @@ export const tradeSchema = z
     }
   });
 
+const savedViewDate = z.union([z.literal(""), calendarDateString]);
+const savedViewId = z.union([z.literal(""), z.string().uuid()]);
+export const savedViewFiltersSchema = z.object({
+  from: savedViewDate.optional().default(""),
+  to: savedViewDate.optional().default(""),
+  accountId: savedViewId.optional().default(""),
+  instrument: z.string().trim().max(32).optional().default(""),
+  strategyId: savedViewId.optional().default(""),
+  direction: z.enum(["", "long", "short"]).optional().default(""),
+  session: z.string().trim().max(40).optional().default(""),
+  reviewStatus: z.enum(["", "unreviewed", "reviewed", "needs_follow_up"]).optional().default(""),
+}).strict();
+
+export const savedViewSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  filters: savedViewFiltersSchema,
+});
+
+export const savedViewUpdateSchema = savedViewSchema.partial().extend({ id: z.string().uuid() });
+
 export const tradeReviewSchema = z
   .object({
     reviewStatus: z.enum(["unreviewed", "reviewed", "needs_follow_up"]),

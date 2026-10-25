@@ -197,6 +197,21 @@ export const tags = pgTable(
   ],
 );
 
+export const savedViews = pgTable(
+  "saved_views",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    filters: jsonb("filters").$type<Record<string, string>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("saved_views_user_idx").on(t.userId), uniqueIndex("saved_views_user_name_idx").on(t.userId, t.name)],
+);
+
 export const importBatches = pgTable(
   "import_batches",
   {

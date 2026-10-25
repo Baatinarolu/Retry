@@ -1,19 +1,10 @@
 "use client";
 
 import { apiJson } from "@/lib/client-api";
+import { emptyFilters, filterQuery, type FilterState } from "@/lib/filter-state";
 import { useCallback, useEffect, useState } from "react";
-import { FilterState, filterQuery } from "./Filters";
 
-export const emptyFilters: FilterState = {
-  from: "",
-  to: "",
-  accountId: "",
-  instrument: "",
-  strategyId: "",
-  direction: "",
-  session: "",
-  reviewStatus: "",
-};
+export { emptyFilters } from "@/lib/filter-state";
 
 type Account = { id: string; name: string; currency: string; currentBalance: string; startingBalance: string };
 type Bootstrap = {
