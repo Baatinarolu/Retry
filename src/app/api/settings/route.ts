@@ -20,7 +20,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const parsed = settingsSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError("Invalid settings");
@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const { clearSessionCookie } = await import("@/lib/auth");
   const shots = await db

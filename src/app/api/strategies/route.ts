@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const parsed = strategySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError("Invalid strategy");
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const body = await req.json().catch(() => null);
   if (!body?.id) return jsonError("id required");
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return jsonError("id required");

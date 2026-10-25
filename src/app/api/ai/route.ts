@@ -3,7 +3,7 @@ import { aiReviews } from "@/db/schema";
 import { jsonError, parseFilters, requireUser } from "@/lib/api";
 import { buildAnalytics, ruleBasedCoach } from "@/lib/analytics";
 import { generateCoachReview } from "@/lib/coach";
-import { rateLimit } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 import { loadTradeRows, reportingContextFor } from "@/lib/queries";
 import { shiftCalendarDate, zonedDayKey } from "@/lib/reporting";
 import { desc, eq } from "drizzle-orm";
@@ -24,9 +24,16 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, user, error } = await requireUser();
+  const { session, user, error } = await requireUser({ write: true });
   if (error) return error;
-  if (!rateLimit(`ai:${session!.uid}`, 10).ok) return jsonError("Too many reviews. Try again shortly.", 429);
+  const limited = await rateLimit(`ai:${session!.uid}`, 10).catch(() => null);
+  if (!limited) return jsonError("Rate limiting is temporarily unavailable. Try again shortly.", 503);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many reviews. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } },
+    );
+  }
   const body = await req.json().catch(() => ({}));
   const type = String(body.type || "review");
   if (!["review", "weekly", "monthly", "psychology"].includes(type)) return jsonError("Invalid review type");

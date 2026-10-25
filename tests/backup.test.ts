@@ -27,11 +27,12 @@ function emptyBackup(): BackupEnvelope {
 }
 
 test("versioned backup covers every workspace table and strips credential fields", () => {
-  const input = { ...emptyBackup(), user: { ...emptyBackup().user, passwordHash: "must-not-survive", sessionVersion: 99 } };
+  const input = { ...emptyBackup(), user: { ...emptyBackup().user, passwordHash: "must-not-survive", sessionVersion: 99, demoMode: true } };
   const parsed = parseBackup(input);
   assert.deepEqual(Object.keys(parsed.data).sort(), [...BACKUP_TABLES].sort());
   assert.equal("passwordHash" in parsed.user, false);
   assert.equal("sessionVersion" in parsed.user, false);
+  assert.equal("demoMode" in parsed.user, false);
   assert.equal(validateBackupReferences(parsed).tradingAccounts.size, 0);
 });
 

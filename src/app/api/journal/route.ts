@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const parsed = journalSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid journal entry");

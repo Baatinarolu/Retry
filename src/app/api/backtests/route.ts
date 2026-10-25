@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const body = await req.json().catch(() => null);
   if (body?.backtestId) {
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const url = new URL(req.url);
   const tradeId = url.searchParams.get("tradeId");

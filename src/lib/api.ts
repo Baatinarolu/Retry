@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "./auth";
 import type { TradeFilters } from "./queries";
 
-export async function requireUser() {
+export async function requireUser(options: { write?: boolean } = {}) {
   const session = await getSession();
   if (!session) {
     return {
@@ -20,6 +20,7 @@ export async function requireUser() {
       timezone: users.timezone,
       baseCurrency: users.baseCurrency,
       aiPermission: users.aiPermission,
+      demoMode: users.demoMode,
     })
     .from(users)
     .where(eq(users.id, session.uid));
@@ -28,6 +29,13 @@ export async function requireUser() {
       session: null as null,
       user: null,
       error: NextResponse.json({ error: "Session expired" }, { status: 401 }),
+    };
+  }
+  if (options.write && user.demoMode) {
+    return {
+      session,
+      user,
+      error: NextResponse.json({ error: "Demo mode is read-only. Create your own workspace to save changes." }, { status: 403 }),
     };
   }
   return { session, user, error: null };

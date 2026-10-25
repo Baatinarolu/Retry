@@ -46,6 +46,17 @@ export const passwordResetTokens = pgTable(
   (t) => [index("password_reset_user_idx").on(t.userId), uniqueIndex("password_reset_token_idx").on(t.tokenHash)],
 );
 
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rate_limits_reset_idx").on(t.resetAt)],
+);
+
 export const tradingAccounts = pgTable(
   "trading_accounts",
   {

@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { passwordResetTokens, users } from "@/db/schema";
-import { clearSessionCookie, hashPassword, rateLimit, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { clearSessionCookie, hashPassword, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 import { seedDemoTrades } from "@/lib/demo-data";
 import { provisionNewUser } from "@/lib/onboarding";
 import { forgotSchema, loginSchema, resetSchema, signupSchema } from "@/lib/validations";
@@ -14,8 +15,14 @@ function ipOf(req: NextRequest) {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ action: string }> }) {
   const { action } = await ctx.params;
-  const limited = rateLimit(`auth:${action}:${ipOf(req)}`, action === "login" ? 12 : 20, 60_000);
-  if (!limited.ok) return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
+  const limited = await rateLimit(`auth:${action}:${ipOf(req)}`, action === "login" ? 12 : 20, 60_000).catch(() => null);
+  if (!limited) return NextResponse.json({ error: "Rate limiting is temporarily unavailable. Try again shortly." }, { status: 503 });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } },
+    );
+  }
 
   if (action === "logout") {
     await clearSessionCookie();

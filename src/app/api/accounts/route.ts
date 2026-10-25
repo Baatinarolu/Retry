@@ -20,7 +20,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const parsed = accountSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid account");
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const body = await req.json().catch(() => null);
   const parsed = accountSchema.partial().extend({ id: z.string().uuid() }).safeParse(body);
@@ -104,7 +104,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const id = new URL(req.url).searchParams.get("id");
   if (!id || !z.string().uuid().safeParse(id).success) return jsonError("Valid id required");

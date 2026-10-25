@@ -29,7 +29,7 @@ function validSignature(mimeType: string, buffer: Buffer) {
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const { id } = await ctx.params;
   const [trade] = await db

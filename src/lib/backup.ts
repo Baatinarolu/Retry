@@ -39,7 +39,6 @@ const attachmentSchema = z.object({
   data: z.string().max(MAX_BACKUP_BYTES),
 });
 const backupUserSchema = settingsSchema.extend({
-  demoMode: z.boolean().optional(),
   onboardingComplete: z.boolean().optional(),
 });
 

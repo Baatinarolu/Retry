@@ -101,7 +101,7 @@ async function commitPrepared(userId: string, batchId: string, prepared: ReturnT
 }
 
 export async function POST(request: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > MAX_BODY_CHARS) return jsonError("Import request is too large (2 MB CSV maximum)", 413);
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const batchId = request.nextUrl.searchParams.get("id");
   if (!batchId || !isUuid(batchId)) return jsonError("Invalid batch ID");

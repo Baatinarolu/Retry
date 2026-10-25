@@ -243,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="mx-auto max-w-[1480px] px-4 pb-24 pt-7 sm:px-6 lg:px-9 lg:pb-14 lg:pt-10">
           {user?.demoMode ? (
-            <div className="banner banner-warn no-print mb-6">Demo mode — shared sample workspace; do not enter private data.</div>
+            <div className="banner banner-warn no-print mb-6">Demo mode — read-only shared sample workspace. Changes are not saved; create your own workspace to journal.</div>
           ) : null}
           {children}
         </main>

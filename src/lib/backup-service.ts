@@ -56,7 +56,6 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     timeFormat: users.timeFormat,
     baseCurrency: users.baseCurrency,
     aiPermission: users.aiPermission,
-    demoMode: users.demoMode,
     onboardingComplete: users.onboardingComplete,
   }).from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new Error("User not found");

@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const body = await req.json().catch(() => null);
   const parsed = tradeSchema.safeParse(body);

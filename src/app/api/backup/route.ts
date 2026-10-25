@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, error } = await requireUser({ write: true });
   if (error) return error;
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > MAX_BACKUP_BYTES) return jsonError("Backup request is too large", 413);
