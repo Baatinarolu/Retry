@@ -20,7 +20,7 @@ export function ExecutionReviewPanel({ review, currency }: { review: ExecutionRe
         <Stat
           label="Target attainment"
           value={review.targetAttainment === null ? "—" : formatPct(Number(review.targetAttainment))}
-          hint="Actual blended exit versus planned target"
+          hint="Actual blended exit versus current target field"
         />
         <Stat
           label="Observed MAE"

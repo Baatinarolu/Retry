@@ -35,11 +35,12 @@ test("versioned backup covers every workspace table and strips credential fields
   assert.equal("demoMode" in parsed.user, false);
   assert.equal(validateBackupReferences(parsed).tradingAccounts.size, 0);
   const legacyData = Object.fromEntries(Object.entries(emptyBackup().data)
-    .filter(([key]) => key !== "savedViews" && key !== "importMappingPresets" && key !== "tradePricePoints"));
+    .filter(([key]) => key !== "savedViews" && key !== "importMappingPresets" && key !== "tradePricePoints" && key !== "tradeRiskLevels"));
   const legacy = parseBackup({ ...emptyBackup(), data: legacyData });
   assert.deepEqual(legacy.data.savedViews, []);
   assert.deepEqual(legacy.data.importMappingPresets, []);
   assert.deepEqual(legacy.data.tradePricePoints, []);
+  assert.deepEqual(legacy.data.tradeRiskLevels, []);
 });
 
 test("restore validation rejects cross-workspace references and duplicate IDs before deletion", () => {
@@ -76,11 +77,13 @@ test("timestamp revival preserves calendar dates and rejects malformed instants"
   backup.data.savedViews.push({ id: tradeId, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", filters: { direction: "long" } });
   backup.data.importMappingPresets.push({ id: tradeId, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", mapping: { instrument: "asset" } });
   backup.data.tradePricePoints.push({ id: tradeId, tradeId, observedAt: "2026-01-01T00:00:00.000Z", createdAt: "2026-01-01T00:00:00.000Z" });
+  backup.data.tradeRiskLevels.push({ id: tradeId, tradeId, effectiveAt: "2026-01-01T00:00:00.000Z", createdAt: "2026-01-01T00:00:00.000Z" });
   const revived = reviveBackupData(backup.data);
   assert.equal(revived.tradingAccounts[0].createdAt instanceof Date, true);
   assert.equal(revived.savedViews[0].updatedAt instanceof Date, true);
   assert.equal(revived.importMappingPresets[0].updatedAt instanceof Date, true);
   assert.equal(revived.tradePricePoints[0].observedAt instanceof Date, true);
+  assert.equal(revived.tradeRiskLevels[0].effectiveAt instanceof Date, true);
   assert.equal(revived.dailyJournals[0].journalDate, "2026-01-01");
   backup.data.trades.push({ id: tradeId, accountId, entryAt: "2026-01-01T00:00:00.000Z", reviewedAt: "2026-01-02T00:00:00.000Z", reviewStatus: "reviewed", nextAction: "Wait for confirmation" });
   const withReview = reviveBackupData(backup.data);

@@ -18,6 +18,7 @@ import {
   tags,
   tradeExecutions,
   tradePricePoints,
+  tradeRiskLevels,
   tradeTags,
   trades,
   tradingAccounts,
@@ -76,6 +77,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     tradeRows,
     executionRows,
     pricePointRows,
+    riskLevelRows,
     tradeTagRows,
     psychologyRows,
     screenshotRows,
@@ -97,6 +99,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     db.select().from(trades).where(eq(trades.userId, userId)),
     db.select().from(tradeExecutions).where(eq(tradeExecutions.userId, userId)),
     db.select().from(tradePricePoints).where(eq(tradePricePoints.userId, userId)),
+    db.select().from(tradeRiskLevels).where(eq(tradeRiskLevels.userId, userId)),
     db.select({ id: tradeTags.id, tradeId: tradeTags.tradeId, tagId: tradeTags.tagId }).from(tradeTags)
       .innerJoin(trades, eq(tradeTags.tradeId, trades.id)).where(eq(trades.userId, userId)),
     db.select().from(psychologyRecords).where(eq(psychologyRecords.userId, userId)),
@@ -138,6 +141,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
       trades: tradeRows,
       tradeExecutions: executionRows,
       tradePricePoints: pricePointRows,
+      tradeRiskLevels: riskLevelRows,
       tradeTags: tradeTagRows,
       psychologyRecords: psychologyRows,
       screenshots: screenshotRows,
@@ -191,6 +195,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await tx.delete(psychologyRecords).where(eq(psychologyRecords.userId, userId));
       await tx.delete(tradeExecutions).where(eq(tradeExecutions.userId, userId));
       await tx.delete(tradePricePoints).where(eq(tradePricePoints.userId, userId));
+      await tx.delete(tradeRiskLevels).where(eq(tradeRiskLevels.userId, userId));
       await tx.delete(trades).where(eq(trades.userId, userId));
       await tx.delete(backtestTrades).where(eq(backtestTrades.userId, userId));
       await tx.delete(backtests).where(eq(backtests.userId, userId));
@@ -222,6 +227,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await insertRows(tx, trades, owned(data.trades, userId));
       await insertRows(tx, tradeExecutions, owned(data.tradeExecutions, userId));
       await insertRows(tx, tradePricePoints, owned(data.tradePricePoints, userId));
+      await insertRows(tx, tradeRiskLevels, owned(data.tradeRiskLevels, userId));
       await insertRows(tx, psychologyRecords, owned(data.psychologyRecords, userId));
       await insertRows(tx, screenshots, data.screenshots.map((row) => ({
         ...row,

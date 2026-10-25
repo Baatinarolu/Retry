@@ -5,6 +5,7 @@ import { CASH_FLOW_TYPES } from "./cash-flow";
 import { IMPORT_FIELD_KEYS, type ImportColumnMapping } from "./import-mapping";
 import { normalizeCsvHeader } from "./csv";
 import { MAX_PRICE_PATH_POINTS } from "./price-path";
+import { MAX_RISK_LEVEL_SNAPSHOTS } from "./risk-levels";
 
 const isBlank = (value: unknown) => value === "" || value === null || value === undefined;
 
@@ -290,6 +291,17 @@ export const pricePathPointSchema = z.object({
 
 export const pricePathSchema = z.object({
   points: z.array(pricePathPointSchema).max(MAX_PRICE_PATH_POINTS),
+}).strict();
+
+export const riskLevelSnapshotSchema = z.object({
+  effectiveAt: dateTimeString,
+  stopLoss: optionalPositive,
+  takeProfit: optionalPositive,
+  notes: optionalText(500),
+}).strict();
+
+export const riskLevelsSchema = z.object({
+  snapshots: z.array(riskLevelSnapshotSchema).max(MAX_RISK_LEVEL_SNAPSHOTS),
 }).strict();
 
 export const strategySchema = z.object({

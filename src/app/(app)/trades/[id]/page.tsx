@@ -3,6 +3,7 @@
 import { TradeForm } from "@/components/TradeForm";
 import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
 import { PricePathPanel } from "@/components/PricePathPanel";
+import { RiskLevelsPanel } from "@/components/RiskLevelsPanel";
 import { TradeReviewPanel } from "@/components/TradeReviewPanel";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
@@ -86,6 +87,11 @@ export default function TradeDetailPage() {
           }}
         />
       ) : null}
+      <RiskLevelsPanel
+        tradeId={id}
+        levels={trade.riskLevels || []}
+        onSaved={(riskLevels) => setTrade((current: any) => ({ ...current, riskLevels }))}
+      />
       <TradeReviewPanel
         trade={trade}
         onSaved={(review) => setTrade((current: any) => ({ ...current, ...review }))}

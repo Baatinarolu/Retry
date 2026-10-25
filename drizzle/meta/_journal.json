@@ -64,6 +64,13 @@
       "when": 1792952001314,
       "tag": "0008_trade_price_paths",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792952658290,
+      "tag": "0009_trade_risk_levels",
+      "breakpoints": true
     }
   ]
 }

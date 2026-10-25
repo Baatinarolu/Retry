@@ -381,6 +381,29 @@ export const tradePricePoints = pgTable(
   ],
 );
 
+export const tradeRiskLevels = pgTable(
+  "trade_risk_levels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tradeId: uuid("trade_id")
+      .notNull()
+      .references(() => trades.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull(),
+    stopLoss: numeric("stop_loss", { precision: 18, scale: 8 }),
+    takeProfit: numeric("take_profit", { precision: 18, scale: 8 }),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("risk_levels_trade_idx").on(t.tradeId),
+    index("risk_levels_user_idx").on(t.userId),
+    uniqueIndex("risk_levels_trade_time_idx").on(t.tradeId, t.effectiveAt),
+  ],
+);
+
 export const tradeTags = pgTable(
   "trade_tags",
   {

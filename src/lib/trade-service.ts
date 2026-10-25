@@ -8,6 +8,7 @@ import {
   tags,
   tradeExecutions,
   tradePricePoints,
+  tradeRiskLevels,
   tradeTags,
   trades,
   tradingAccounts,
@@ -18,6 +19,7 @@ import { buildAccountBalanceSnapshots } from "./accounting";
 import { computeTradeMetrics, type Direction } from "./calculations";
 import { calculateExecutionLedger, type ExecutionLedger } from "./execution-ledger";
 import { normalizePricePath } from "./price-path";
+import { normalizeRiskLevels } from "./risk-levels";
 import { deleteScreenshotFiles } from "./screenshot-storage";
 
 export type TradePayload = {
@@ -493,6 +495,14 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
     if (existingPath.length) {
       if (!calculated.executionBased) throw new Error("Remove the recorded price path before removing executions");
       normalizePricePath(existingPath, {
+        entryAt: calculated.entryAt,
+        exitAt: calculated.exitAt,
+        now: new Date(),
+      });
+    }
+    const existingRiskLevels = await tx.select().from(tradeRiskLevels).where(eq(tradeRiskLevels.tradeId, tradeId));
+    if (existingRiskLevels.length) {
+      normalizeRiskLevels(existingRiskLevels, {
         entryAt: calculated.entryAt,
         exitAt: calculated.exitAt,
         now: new Date(),

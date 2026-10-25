@@ -6,6 +6,7 @@ import {
   tags,
   tradeExecutions,
   tradePricePoints,
+  tradeRiskLevels,
   tradeTags,
   trades,
   tradingAccounts,
@@ -44,6 +45,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const pricePath = await db.select().from(tradePricePoints)
     .where(and(eq(tradePricePoints.tradeId, id), eq(tradePricePoints.userId, session!.uid)))
     .orderBy(asc(tradePricePoints.observedAt), asc(tradePricePoints.id));
+  const riskLevels = await db.select().from(tradeRiskLevels)
+    .where(and(eq(tradeRiskLevels.tradeId, id), eq(tradeRiskLevels.userId, session!.uid)))
+    .orderBy(asc(tradeRiskLevels.effectiveAt), asc(tradeRiskLevels.id));
   const shots = await db.select().from(screenshots).where(eq(screenshots.tradeId, id));
   const executionReview = executions.length
     ? buildExecutionReview({
@@ -75,6 +79,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       tags: tagRows.map((t) => t.tag),
       executions,
       pricePath,
+      riskLevels,
       executionReview,
       screenshots: shots,
     },

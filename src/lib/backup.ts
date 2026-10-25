@@ -20,6 +20,7 @@ export const BACKUP_TABLES = [
   "trades",
   "tradeExecutions",
   "tradePricePoints",
+  "tradeRiskLevels",
   "tradeTags",
   "psychologyRecords",
   "screenshots",
@@ -35,7 +36,7 @@ export type BackupRow = Record<string, any>;
 
 const rowSchema = z.record(z.string(), z.unknown());
 const rowsSchema = z.array(rowSchema).max(100_000);
-const optionalBackupTables = new Set<string>(["savedViews", "importMappingPresets", "tradePricePoints"]);
+const optionalBackupTables = new Set<string>(["savedViews", "importMappingPresets", "tradePricePoints", "tradeRiskLevels"]);
 const dataSchema = z.object(Object.fromEntries(BACKUP_TABLES.map((key) => [
   key,
   optionalBackupTables.has(key) ? rowsSchema.optional().default([]) : rowsSchema,
@@ -126,6 +127,7 @@ export function validateBackupReferences(backup: BackupEnvelope) {
   }
   for (const row of data.tradeExecutions) reference(row.tradeId, ids.trades, "tradeExecutions", "tradeId", false);
   for (const row of data.tradePricePoints) reference(row.tradeId, ids.trades, "tradePricePoints", "tradeId", false);
+  for (const row of data.tradeRiskLevels) reference(row.tradeId, ids.trades, "tradeRiskLevels", "tradeId", false);
   for (const row of data.psychologyRecords) reference(row.tradeId, ids.trades, "psychologyRecords", "tradeId", false);
   for (const row of data.screenshots) reference(row.tradeId, ids.trades, "screenshots", "tradeId", false);
   for (const row of data.tradeTags) {
@@ -163,6 +165,7 @@ const TIMESTAMP_COLUMNS: Partial<Record<BackupTable, string[]>> = {
   trades: ["entryAt", "exitAt", "realizedAt", "reviewedAt", "createdAt", "updatedAt"],
   tradeExecutions: ["executedAt"],
   tradePricePoints: ["observedAt", "createdAt"],
+  tradeRiskLevels: ["effectiveAt", "createdAt"],
   screenshots: ["createdAt"],
   dailyJournals: ["createdAt", "updatedAt"],
   backtests: ["createdAt", "updatedAt"],
