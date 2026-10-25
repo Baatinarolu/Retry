@@ -1,41 +1,7 @@
 import type { TradePayload } from "@/lib/trade-service";
 import { importSource, isExecutionCsv, normalizeExecutionType, sourceConflict, type ImportSource } from "@/lib/import-trust";
 import { tradeSchema } from "@/lib/validations";
-
-const ALIASES: Record<string, string[]> = {
-  instrument: ["instrument", "symbol", "ticker", "pair"],
-  direction: ["direction", "side", "type", "buy_sell"],
-  entryAt: ["entry_at", "entry_time", "open_time", "time", "date"],
-  exitAt: ["exit_at", "exit_time", "close_time"],
-  entryPrice: ["entry_price", "open_price", "open"],
-  exitPrice: ["exit_price", "close_price", "close"],
-  stopLoss: ["stop_loss", "sl"],
-  takeProfit: ["take_profit", "tp"],
-  lotSize: ["lot_size", "lots", "volume", "size", "qty"],
-  positionSize: ["position_size", "quantity"],
-  contractSize: ["contract_size", "contract_multiplier", "multiplier"],
-  tickSize: ["tick_size"],
-  tickValue: ["tick_value", "point_value"],
-  pipSize: ["pip_size"],
-  pipValue: ["pip_value"],
-  totalCommission: ["total_commission", "commission_total"],
-  commission: ["commission", "fee", "fees"],
-  swap: ["swap", "swap_fee", "funding"],
-  slippage: ["slippage"],
-  netPnl: ["net_pnl", "pnl", "profit", "net", "total_pnl", "total_net_pnl"],
-  totalPnl: ["total_pnl", "total_net_pnl"],
-  session: ["session"],
-  status: ["status", "state"],
-  marketCategory: ["market_category", "category", "market", "asset_class"],
-  strategy: ["strategy", "strategy_name", "setup", "playbook"],
-  notes: ["notes", "comment", "comments"],
-  sourceId: ["source_id", "trade_id", "position_id", "ticket"],
-  executionType: ["execution_type", "fill_type"],
-  executionPrice: ["execution_price", "fill_price", "price"],
-  executionQuantity: ["execution_quantity", "fill_quantity", "quantity", "size", "volume", "qty"],
-  executedAt: ["executed_at", "execution_time", "fill_time", "timestamp", "time", "date"],
-  executionFees: ["execution_fees", "fill_fees", "fees", "commission", "fee"],
-};
+import { IMPORT_ALIASES } from "@/lib/import-mapping";
 
 export type ImportInstrumentSpec = {
   category: string;
@@ -77,8 +43,9 @@ function pick(row: Record<string, string>, keys: string[]) {
 /** Accept both raw broker headers and the canonical rows returned by an older preview. */
 export function canonicalRow(row: Record<string, string>) {
   const data: Record<string, string> = {};
-  for (const [key, aliases] of Object.entries(ALIASES)) {
-    const value = pick(row, [key, ...aliases]);
+  for (const [key, aliases] of Object.entries(IMPORT_ALIASES)) {
+    // An explicitly mapped canonical key is authoritative, including when its cell is blank.
+    const value = Object.hasOwn(row, key) ? String(row[key] ?? "").trim() : pick(row, aliases);
     if (value) data[key] = value;
   }
   return data;

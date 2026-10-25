@@ -4,6 +4,10 @@ export type ParsedCsv = {
   lineMap: number[];
 };
 
+export function normalizeCsvHeader(header: string) {
+  return header.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
 /** Parse comma-separated data, including escaped quotes and newlines inside quoted fields. */
 export function parseCsv(text: string): ParsedCsv {
   const records: { cells: string[]; line: number }[] = [];
@@ -56,7 +60,7 @@ export function parseCsv(text: string): ParsedCsv {
   if (cell.length || row.length) finishRecord();
   if (!records.length) return { headers: [], rows: [], lineMap: [] };
 
-  const headers = records[0].cells.map((header) => header.toLowerCase().replace(/\s+/g, "_"));
+  const headers = records[0].cells.map(normalizeCsvHeader);
   if (headers.some((header) => !header)) throw new Error("CSV contains an empty header");
   if (new Set(headers).size !== headers.length) throw new Error("CSV contains duplicate headers");
 

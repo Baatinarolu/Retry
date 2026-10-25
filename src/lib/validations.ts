@@ -2,6 +2,8 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 import { isValidTimeZone } from "./reporting";
 import { CASH_FLOW_TYPES } from "./cash-flow";
+import { IMPORT_FIELD_KEYS, type ImportColumnMapping } from "./import-mapping";
+import { normalizeCsvHeader } from "./csv";
 
 const isBlank = (value: unknown) => value === "" || value === null || value === undefined;
 
@@ -244,6 +246,29 @@ export const savedViewSchema = z.object({
 });
 
 export const savedViewUpdateSchema = savedViewSchema.partial().extend({ id: z.string().uuid() });
+
+const importFieldSet = new Set<string>(IMPORT_FIELD_KEYS);
+export const importColumnMappingSchema = z
+  .record(z.string(), z.string().trim().min(1, "Choose a source column").max(120))
+  .superRefine((mapping, ctx) => {
+    const entries = Object.entries(mapping);
+    if (entries.length > IMPORT_FIELD_KEYS.length) {
+      ctx.addIssue({ code: "custom", message: `Map at most ${IMPORT_FIELD_KEYS.length} columns` });
+    }
+    for (const field of Object.keys(mapping)) {
+      if (!importFieldSet.has(field)) ctx.addIssue({ code: "custom", message: `Unknown import field: ${field}` });
+    }
+  })
+  .transform((mapping) => Object.fromEntries(
+    Object.entries(mapping).map(([field, source]) => [field, normalizeCsvHeader(source)]),
+  ) as ImportColumnMapping);
+
+export const importMappingPresetSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  mapping: importColumnMappingSchema.refine((mapping) => Object.keys(mapping).length > 0, "Map at least one column"),
+}).strict();
+
+export const importMappingPresetUpdateSchema = importMappingPresetSchema.partial().extend({ id: z.string().uuid() });
 
 export const tradeReviewSchema = z
   .object({

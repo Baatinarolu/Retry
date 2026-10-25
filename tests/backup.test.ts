@@ -34,9 +34,11 @@ test("versioned backup covers every workspace table and strips credential fields
   assert.equal("sessionVersion" in parsed.user, false);
   assert.equal("demoMode" in parsed.user, false);
   assert.equal(validateBackupReferences(parsed).tradingAccounts.size, 0);
-  const legacyData = Object.fromEntries(Object.entries(emptyBackup().data).filter(([key]) => key !== "savedViews"));
+  const legacyData = Object.fromEntries(Object.entries(emptyBackup().data)
+    .filter(([key]) => key !== "savedViews" && key !== "importMappingPresets"));
   const legacy = parseBackup({ ...emptyBackup(), data: legacyData });
   assert.deepEqual(legacy.data.savedViews, []);
+  assert.deepEqual(legacy.data.importMappingPresets, []);
 });
 
 test("restore validation rejects cross-workspace references and duplicate IDs before deletion", () => {
@@ -71,9 +73,11 @@ test("timestamp revival preserves calendar dates and rejects malformed instants"
   backup.data.tradingAccounts.push({ id: accountId, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: null });
   backup.data.dailyJournals.push({ id: tradeId, accountId, journalDate: "2026-01-01", createdAt: "2026-01-01T00:00:00.000Z" });
   backup.data.savedViews.push({ id: tradeId, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", filters: { direction: "long" } });
+  backup.data.importMappingPresets.push({ id: tradeId, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", mapping: { instrument: "asset" } });
   const revived = reviveBackupData(backup.data);
   assert.equal(revived.tradingAccounts[0].createdAt instanceof Date, true);
   assert.equal(revived.savedViews[0].updatedAt instanceof Date, true);
+  assert.equal(revived.importMappingPresets[0].updatedAt instanceof Date, true);
   assert.equal(revived.dailyJournals[0].journalDate, "2026-01-01");
   backup.data.trades.push({ id: tradeId, accountId, entryAt: "2026-01-01T00:00:00.000Z", reviewedAt: "2026-01-02T00:00:00.000Z", reviewStatus: "reviewed", nextAction: "Wait for confirmation" });
   const withReview = reviveBackupData(backup.data);

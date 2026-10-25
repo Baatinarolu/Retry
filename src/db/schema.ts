@@ -212,6 +212,24 @@ export const savedViews = pgTable(
   (t) => [index("saved_views_user_idx").on(t.userId), uniqueIndex("saved_views_user_name_idx").on(t.userId, t.name)],
 );
 
+export const importMappingPresets = pgTable(
+  "import_mapping_presets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mapping: jsonb("mapping").$type<Record<string, string>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("import_mapping_presets_user_idx").on(t.userId),
+    uniqueIndex("import_mapping_presets_user_name_idx").on(t.userId, t.name),
+  ],
+);
+
 export const importBatches = pgTable(
   "import_batches",
   {
@@ -225,6 +243,7 @@ export const importBatches = pgTable(
     fileName: text("file_name").notNull().default(""),
     fileHash: text("file_hash").notNull(),
     originalCsv: text("original_csv").notNull(),
+    columnMapping: jsonb("column_mapping").$type<Record<string, string>>().notNull().default({}),
     status: text("status").notNull().default("preview"),
     totalRows: integer("total_rows").notNull().default(0),
     importedRows: integer("imported_rows").notNull().default(0),

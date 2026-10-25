@@ -1,27 +1,44 @@
 "use client";
 
 import { Filters } from "@/components/Filters";
+import { ImportMappingPresets } from "@/components/ImportMappingPresets";
 import { Banner, Button, Card } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { APP_NAME } from "@/lib/constants";
+import { parseCsv } from "@/lib/csv";
 import { formatMoney, formatPct } from "@/lib/format";
-import { useEffect, useState } from "react";
+import type { ImportColumnMapping } from "@/lib/import-mapping";
+import { useEffect, useMemo, useState } from "react";
 
 export default function ReportsPage() {
   const ws = useWorkspace();
   const [report, setReport] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
   const [csv, setCsv] = useState("");
+  const [mapping, setMapping] = useState<ImportColumnMapping>({});
   const [fileName, setFileName] = useState("import.csv");
   const [accountId, setAccountId] = useState("");
   const [message, setMessage] = useState("");
   const [importError, setImportError] = useState("");
   const [committedBatchId, setCommittedBatchId] = useState("");
+  const headers = useMemo(() => {
+    if (!csv.trim()) return [];
+    try {
+      return parseCsv(csv).headers;
+    } catch {
+      return [];
+    }
+  }, [csv]);
 
   useEffect(() => {
     if (ws.loading) return;
     fetch(`/api/reports?${ws.qs}`).then((r) => r.json()).then(setReport);
   }, [ws.loading, ws.qs]);
+
+  function changeMapping(next: ImportColumnMapping) {
+    setMapping(next);
+    setPreview(null);
+  }
 
   async function previewImport() {
     setImportError("");
@@ -29,7 +46,7 @@ export default function ReportsPage() {
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csv, accountId, fileName }),
+      body: JSON.stringify({ csv, accountId, fileName, mapping }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -38,6 +55,7 @@ export default function ReportsPage() {
       return;
     }
     setPreview(data);
+    setMapping(data.columnMapping || {});
   }
 
   async function commitImport() {
@@ -111,7 +129,7 @@ export default function ReportsPage() {
       <Card className="no-print space-y-3">
         <h2 className="font-semibold">CSV import</h2>
         <p className="text-sm text-[var(--muted)]">
-          Map common broker columns (symbol, side, open_time, open, close, volume, pnl). Exact source IDs or row hashes make retries idempotent; repeated trades with different content are not rejected as look-alikes.
+          Common broker columns map automatically; add explicit mappings below and save them as reusable presets. Exact source IDs or row hashes make retries idempotent; repeated trades with different content are not rejected as look-alikes.
         </p>
         <p className="text-xs text-[var(--muted)]">
           Execution CSV: include <code>trade_id</code> (or <code>position_id</code>) on every fill plus <code>execution_type</code> = entry, scale_in, scale_out, or exit. Fills in one group become one execution-led trade. The original CSV is retained with the batch for reconciliation and rollback.
@@ -131,6 +149,7 @@ export default function ReportsPage() {
           }
         }} />
         <textarea className="textarea min-h-40 font-mono text-xs" value={csv} onChange={(e) => { setCsv(e.target.value); setPreview(null); }} placeholder="symbol,side,open_time,open,close,volume,pnl" />
+        <ImportMappingPresets headers={headers} value={mapping} onChange={changeMapping} />
         <div className="flex flex-wrap gap-2">
           <Button onClick={previewImport}>Preview</Button>
           {preview ? <Button variant="ghost" onClick={commitImport}>Commit valid rows atomically</Button> : null}
@@ -140,6 +159,7 @@ export default function ReportsPage() {
         {preview ? (
           <div className="text-sm">
             <p>Valid {preview.valid} · flagged {preview.rejected} · {preview.sourceRows} source rows → {preview.tradeRecords} trade records{preview.executionMode ? " · execution grouping" : ""}</p>
+            {Object.keys(preview.columnMapping || {}).length ? <p className="mt-1 text-xs text-[var(--muted)]">{Object.keys(preview.columnMapping).length} explicit column mappings retained with this batch.</p> : null}
             <div className="table-wrap mt-2">
               <table className="data">
                 <thead><tr><th>Line</th><th>Instrument</th><th>Issues</th></tr></thead>

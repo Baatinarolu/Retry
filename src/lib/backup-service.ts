@@ -8,6 +8,7 @@ import {
   customSessions,
   dailyJournals,
   importBatches,
+  importMappingPresets,
   instruments,
   psychologyRecords,
   riskSettings,
@@ -69,6 +70,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     strategyRows,
     tagRows,
     savedViewRows,
+    importMappingRows,
     importRows,
     tradeRows,
     executionRows,
@@ -88,6 +90,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
     db.select().from(strategies).where(eq(strategies.userId, userId)),
     db.select().from(tags).where(eq(tags.userId, userId)),
     db.select().from(savedViews).where(eq(savedViews.userId, userId)),
+    db.select().from(importMappingPresets).where(eq(importMappingPresets.userId, userId)),
     db.select().from(importBatches).where(eq(importBatches.userId, userId)),
     db.select().from(trades).where(eq(trades.userId, userId)),
     db.select().from(tradeExecutions).where(eq(tradeExecutions.userId, userId)),
@@ -127,6 +130,7 @@ export async function exportWorkspace(userId: string): Promise<BackupEnvelope> {
       strategies: strategyRows,
       tags: tagRows,
       savedViews: savedViewRows,
+      importMappingPresets: importMappingRows,
       importBatches: importRows,
       trades: tradeRows,
       tradeExecutions: executionRows,
@@ -191,6 +195,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await tx.delete(riskSettings).where(eq(riskSettings.userId, userId));
       await tx.delete(aiReviews).where(eq(aiReviews.userId, userId));
       await tx.delete(customSessions).where(eq(customSessions.userId, userId));
+      await tx.delete(importMappingPresets).where(eq(importMappingPresets.userId, userId));
       await tx.delete(savedViews).where(eq(savedViews.userId, userId));
       await tx.delete(instruments).where(eq(instruments.userId, userId));
       await tx.delete(strategies).where(eq(strategies.userId, userId));
@@ -202,6 +207,7 @@ export async function restoreWorkspace(userId: string, input: unknown) {
       await insertRows(tx, strategies, owned(data.strategies, userId));
       await insertRows(tx, tags, owned(data.tags, userId));
       await insertRows(tx, savedViews, owned(data.savedViews, userId));
+      await insertRows(tx, importMappingPresets, owned(data.importMappingPresets, userId));
       await insertRows(tx, customSessions, owned(data.customSessions, userId));
       await insertRows(tx, aiReviews, owned(data.aiReviews, userId));
       await insertRows(tx, riskSettings, owned(data.riskSettings, userId));

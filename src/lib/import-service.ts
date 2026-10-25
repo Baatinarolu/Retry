@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { deleteScreenshotFiles } from "@/lib/screenshot-storage";
 import { rebuildAccountBalances } from "@/lib/trade-service";
 import { hashImportFile } from "@/lib/import-trust";
+import type { ImportColumnMapping } from "@/lib/import-mapping";
 
 export async function createImportBatch(
   userId: string,
@@ -12,6 +13,7 @@ export async function createImportBatch(
   originalCsv: string,
   totalRows: number,
   rejectedRows: number,
+  columnMapping: ImportColumnMapping = {},
 ) {
   const [account] = await db.select({ id: tradingAccounts.id }).from(tradingAccounts)
     .where(and(eq(tradingAccounts.id, accountId), eq(tradingAccounts.userId, userId))).limit(1);
@@ -22,6 +24,7 @@ export async function createImportBatch(
     fileName: fileName.slice(0, 200),
     fileHash: hashImportFile(originalCsv),
     originalCsv,
+    columnMapping,
     totalRows,
     rejectedRows,
   }).returning();

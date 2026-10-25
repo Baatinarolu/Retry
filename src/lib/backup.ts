@@ -15,6 +15,7 @@ export const BACKUP_TABLES = [
   "strategies",
   "tags",
   "savedViews",
+  "importMappingPresets",
   "importBatches",
   "trades",
   "tradeExecutions",
@@ -33,9 +34,10 @@ export type BackupRow = Record<string, any>;
 
 const rowSchema = z.record(z.string(), z.unknown());
 const rowsSchema = z.array(rowSchema).max(100_000);
+const optionalBackupTables = new Set<string>(["savedViews", "importMappingPresets"]);
 const dataSchema = z.object(Object.fromEntries(BACKUP_TABLES.map((key) => [
   key,
-  key === "savedViews" ? rowsSchema.optional().default([]) : rowsSchema,
+  optionalBackupTables.has(key) ? rowsSchema.optional().default([]) : rowsSchema,
 ])) as Record<BackupTable, typeof rowsSchema>);
 const attachmentSchema = z.object({
   screenshotId: z.string().uuid(),
@@ -154,6 +156,7 @@ const TIMESTAMP_COLUMNS: Partial<Record<BackupTable, string[]>> = {
   strategies: ["createdAt", "updatedAt"],
   tags: ["createdAt"],
   savedViews: ["createdAt", "updatedAt"],
+  importMappingPresets: ["createdAt", "updatedAt"],
   importBatches: ["createdAt", "committedAt", "rolledBackAt"],
   trades: ["entryAt", "exitAt", "realizedAt", "reviewedAt", "createdAt", "updatedAt"],
   tradeExecutions: ["executedAt"],

@@ -10,6 +10,7 @@ const guardedRoutes: Record<string, string[]> = {
   "src/app/api/backup/route.ts": ["POST"],
   "src/app/api/cash-flows/route.ts": ["POST", "PATCH", "DELETE"],
   "src/app/api/import/route.ts": ["POST", "DELETE"],
+  "src/app/api/import-mappings/route.ts": ["POST", "PATCH", "DELETE"],
   "src/app/api/instruments/route.ts": ["POST", "DELETE"],
   "src/app/api/journal/route.ts": ["POST"],
   "src/app/api/risk/route.ts": ["PATCH"],

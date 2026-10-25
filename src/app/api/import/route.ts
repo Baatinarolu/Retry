@@ -9,6 +9,8 @@ import { prepareImport, type ImportInstrumentSpec, type ImportPreparationOptions
 import type { ImportSource } from "@/lib/import-trust";
 import { parseCsv } from "@/lib/csv";
 import { jsonError, requireUser } from "@/lib/api";
+import { applyImportMapping } from "@/lib/import-mapping";
+import { importColumnMappingSchema } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ const importSchema = z.object({
   csv: z.string().max(MAX_CSV_CHARS).optional(),
   fileName: z.string().max(200).optional(),
   accountId: z.string().optional(),
+  mapping: importColumnMappingSchema.optional(),
   rows: z.array(z.any()).max(MAX_ROWS).optional(),
 });
 
@@ -119,7 +122,8 @@ export async function POST(request: NextRequest) {
       const account = await resolveAccount(session!.uid, batch.accountId);
       const parsed = parseCsv(batch.originalCsv);
       if (parsed.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
-      const prepared = await prepareForAccount(session!.uid, account.id, parsed.rows, parsed.lineMap);
+      const mappedRows = applyImportMapping(parsed.rows, parsed.headers, batch.columnMapping);
+      const prepared = await prepareForAccount(session!.uid, account.id, mappedRows, parsed.lineMap);
       if (prepared.preview.length !== batch.totalRows) {
         return jsonError("The import format changed after preview. Preview the original file again.", 409);
       }
@@ -141,7 +145,9 @@ export async function POST(request: NextRequest) {
     const account = await resolveAccount(session!.uid, input.accountId);
     const parsed = parseCsv(input.csv);
     if (parsed.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
-    const prepared = await prepareForAccount(session!.uid, account.id, parsed.rows, parsed.lineMap);
+    const columnMapping = input.mapping || {};
+    const mappedRows = applyImportMapping(parsed.rows, parsed.headers, columnMapping);
+    const prepared = await prepareForAccount(session!.uid, account.id, mappedRows, parsed.lineMap);
     const batch = await createImportBatch(
       session!.uid,
       account.id,
@@ -149,12 +155,14 @@ export async function POST(request: NextRequest) {
       input.csv,
       prepared.preview.length,
       prepared.rejected,
+      columnMapping,
     );
     return NextResponse.json({
       batchId: batch.id,
       fileHash: batch.fileHash,
       accountId: account.id,
       headers: parsed.headers,
+      columnMapping,
       ...publicPreparation(prepared),
     });
   } catch (cause) {
@@ -178,6 +186,7 @@ export async function GET(request: NextRequest) {
     accountId: importBatches.accountId,
     fileName: importBatches.fileName,
     fileHash: importBatches.fileHash,
+    columnMapping: importBatches.columnMapping,
     status: importBatches.status,
     totalRows: importBatches.totalRows,
     importedRows: importBatches.importedRows,
