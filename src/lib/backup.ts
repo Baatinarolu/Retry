@@ -124,6 +124,7 @@ export function validateBackupReferences(backup: BackupEnvelope) {
     reference(row.accountId, ids.tradingAccounts, "trades", "accountId", false);
     reference(row.strategyId, ids.strategies, "trades", "strategyId");
     reference(row.importBatchId, ids.importBatches, "trades", "importBatchId");
+    reference(row.reversedFromTradeId, ids.trades, "trades", "reversedFromTradeId");
   }
   for (const row of data.tradeExecutions) reference(row.tradeId, ids.trades, "tradeExecutions", "tradeId", false);
   for (const row of data.tradePricePoints) reference(row.tradeId, ids.trades, "tradePricePoints", "tradeId", false);

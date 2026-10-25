@@ -49,6 +49,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     .where(and(eq(tradeRiskLevels.tradeId, id), eq(tradeRiskLevels.userId, session!.uid)))
     .orderBy(asc(tradeRiskLevels.effectiveAt), asc(tradeRiskLevels.id));
   const shots = await db.select().from(screenshots).where(eq(screenshots.tradeId, id));
+  const reversalSource = row.trade.reversedFromTradeId
+    ? (await db.select({ id: trades.id, displayId: trades.displayId, direction: trades.direction, status: trades.status })
+      .from(trades).where(and(eq(trades.id, row.trade.reversedFromTradeId), eq(trades.userId, session!.uid))).limit(1))[0] || null
+    : null;
+  const reversalTarget = (await db.select({ id: trades.id, displayId: trades.displayId, direction: trades.direction, status: trades.status })
+    .from(trades).where(and(eq(trades.reversedFromTradeId, id), eq(trades.userId, session!.uid))).limit(1))[0] || null;
   const executionReview = executions.length
     ? buildExecutionReview({
         direction: row.trade.direction as "long" | "short",
@@ -80,6 +86,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       executions,
       pricePath,
       riskLevels,
+      reversalSource,
+      reversalTarget,
       executionReview,
       screenshots: shots,
     },

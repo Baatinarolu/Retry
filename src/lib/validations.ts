@@ -304,6 +304,18 @@ export const riskLevelsSchema = z.object({
   snapshots: z.array(riskLevelSnapshotSchema).max(MAX_RISK_LEVEL_SNAPSHOTS),
 }).strict();
 
+export const reversalSchema = z.object({
+  executedAt: dateTimeString,
+  closePrice: requiredPositive,
+  entryPrice: requiredPositive,
+  quantity: requiredPositive,
+  closeFees: requiredNonNegative.optional().default("0"),
+  entryFees: requiredNonNegative.optional().default("0"),
+  stopLoss: optionalPositive,
+  takeProfit: optionalPositive,
+  notes: optionalText(2000),
+}).strict();
+
 export const strategySchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: optionalText(),

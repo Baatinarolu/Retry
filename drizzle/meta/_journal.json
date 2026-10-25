@@ -71,6 +71,13 @@
       "when": 1792952658290,
       "tag": "0009_trade_risk_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792953327265,
+      "tag": "0010_trade_reversal_lineage",
+      "breakpoints": true
     }
   ]
 }

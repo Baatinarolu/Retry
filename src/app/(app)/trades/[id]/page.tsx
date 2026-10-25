@@ -4,6 +4,7 @@ import { TradeForm } from "@/components/TradeForm";
 import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
 import { PricePathPanel } from "@/components/PricePathPanel";
 import { RiskLevelsPanel } from "@/components/RiskLevelsPanel";
+import { ReverseTradePanel } from "@/components/ReverseTradePanel";
 import { TradeReviewPanel } from "@/components/TradeReviewPanel";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
@@ -74,7 +75,16 @@ export default function TradeDetailPage() {
         <Stat label="Result" value={<span className="capitalize">{trade.result}</span>} />
         <Stat label="Plan" value={trade.followedPlan ? "Followed" : "Broke"} />
       </div>
+      {trade.reversalSource ? (
+        <Banner>Reversal from <Link className="underline" href={`/trades/${trade.reversalSource.id}`}>{trade.reversalSource.displayId}</Link> · {trade.reversalSource.direction} → {trade.direction}</Banner>
+      ) : null}
+      {trade.reversalTarget ? (
+        <Banner>Reversed to <Link className="underline" href={`/trades/${trade.reversalTarget.id}`}>{trade.reversalTarget.displayId}</Link> · {trade.direction} → {trade.reversalTarget.direction}</Banner>
+      ) : null}
       {trade.executionReview ? <ExecutionReviewPanel review={trade.executionReview} currency={currency} /> : null}
+      {trade.status === "open" && trade.executions?.length ? (
+        <ReverseTradePanel tradeId={id} direction={trade.direction} remainingQuantity={trade.positionSize} />
+      ) : null}
       {trade.executionReview ? (
         <PricePathPanel
           tradeId={id}

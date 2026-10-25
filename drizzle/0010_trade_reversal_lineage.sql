@@ -1,0 +1,3 @@
+ALTER TABLE "trades" ADD COLUMN "reversed_from_trade_id" uuid;--> statement-breakpoint
+ALTER TABLE "trades" ADD CONSTRAINT "trades_reversed_from_trade_id_trades_id_fk" FOREIGN KEY ("reversed_from_trade_id") REFERENCES "public"."trades"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "trades_reversed_from_idx" ON "trades" USING btree ("reversed_from_trade_id");

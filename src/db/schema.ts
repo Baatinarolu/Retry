@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -266,6 +267,7 @@ export const trades = pgTable(
       .notNull()
       .references(() => tradingAccounts.id, { onDelete: "restrict" }),
     importBatchId: uuid("import_batch_id").references(() => importBatches.id, { onDelete: "set null" }),
+    reversedFromTradeId: uuid("reversed_from_trade_id").references((): AnyPgColumn => trades.id, { onDelete: "set null" }),
     sourceKey: text("source_key"),
     sourceHash: text("source_hash"),
     strategyId: uuid("strategy_id").references(() => strategies.id, { onDelete: "set null" }),
@@ -333,6 +335,7 @@ export const trades = pgTable(
     index("trades_user_realized_idx").on(t.userId, t.realizedAt),
     index("trades_account_idx").on(t.accountId),
     index("trades_import_batch_idx").on(t.importBatchId),
+    uniqueIndex("trades_reversed_from_idx").on(t.reversedFromTradeId),
     index("trades_instrument_idx").on(t.userId, t.instrument),
     uniqueIndex("trades_source_idx").on(t.userId, t.accountId, t.sourceKey),
     uniqueIndex("trades_user_display_idx").on(t.userId, t.displayId),

@@ -206,7 +206,8 @@ export function calculateExecutionLedger(input: ExecutionLedgerInput): Execution
   const exitPrice = totalExitQuantity.gt(0) ? exitNotional.div(totalExitQuantity).toFixed(8) : null;
   const positionSize = (closed ? totalEntryQuantity : openQuantity).toFixed(6);
   // R is measured against the maximum simultaneous exposure, not the smaller
-  // quantity left after a partial exit. Stop/target changes are not versioned yet.
+  // quantity left after a partial exit. Historical stop/target snapshots do not
+  // retroactively rewrite this initial-risk basis.
   const calcBase = {
     direction: input.direction,
     entryPrice: peakAverageCost.toFixed(8),

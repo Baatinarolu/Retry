@@ -14,17 +14,19 @@ import {
   tradingAccounts,
   users,
 } from "@/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { buildAccountBalanceSnapshots } from "./accounting";
 import { computeTradeMetrics, type Direction } from "./calculations";
-import { calculateExecutionLedger, type ExecutionLedger } from "./execution-ledger";
+import { calculateExecutionLedger, type ExecutionLedger, type ExecutionLedgerInput } from "./execution-ledger";
 import { normalizePricePath } from "./price-path";
 import { normalizeRiskLevels } from "./risk-levels";
+import { calculateReversal, type ReversalInput } from "./reversal";
 import { deleteScreenshotFiles } from "./screenshot-storage";
 
 export type TradePayload = {
   accountId: string;
   importBatchId?: string | null;
+  reversedFromTradeId?: string | null;
   sourceKey?: string | null;
   sourceHash?: string | null;
   strategyId?: string | null;
@@ -236,6 +238,7 @@ function valuesFor(
   const { closed, entryAt, exitAt, realizedAt, metrics, ledger, executionBased } = calculated;
   return {
     importBatchId: payload.importBatchId || null,
+    reversedFromTradeId: payload.reversedFromTradeId || null,
     sourceKey: payload.sourceKey || null,
     sourceHash: payload.sourceHash || null,
     strategyId: payload.strategyId || null,
@@ -462,6 +465,142 @@ export async function createTradesBatch(userId: string, payloads: TradePayload[]
   });
 }
 
+export async function reverseTrade(
+  userId: string,
+  tradeId: string,
+  input: ReversalInput & { notes?: string },
+) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, userId);
+    const [original] = await tx.select().from(trades)
+      .where(and(eq(trades.id, tradeId), eq(trades.userId, userId))).for("update");
+    if (!original) return null;
+    const account = await lockAccount(tx, userId, original.accountId);
+    const executionRows = await tx.select().from(tradeExecutions)
+      .where(eq(tradeExecutions.tradeId, tradeId))
+      .orderBy(asc(tradeExecutions.executedAt), asc(tradeExecutions.id));
+    if (!executionRows.length) throw new Error("Only an execution-led trade can be reversed");
+    const [existingReversal] = await tx.select({ id: trades.id }).from(trades)
+      .where(eq(trades.reversedFromTradeId, tradeId)).limit(1);
+    if (existingReversal) throw new Error("This trade already has a reversal");
+
+    const noteSuffix = input.notes?.trim() ? ` · ${input.notes.trim()}` : "";
+    const ledgerInput: ExecutionLedgerInput = {
+      direction: original.direction as Direction,
+      status: "open",
+      executions: executionRows.map((execution) => ({
+        ...execution,
+        type: execution.type as "entry" | "scale_in" | "scale_out" | "exit",
+      })),
+      stopLoss: original.stopLoss,
+      takeProfit: original.takeProfit,
+      contractSize: original.contractSize,
+      tickSize: original.tickSize,
+      tickValue: original.tickValue,
+      pipSize: original.pipSize,
+      pipValue: original.pipValue,
+      commission: original.commission,
+      swap: original.swap,
+      slippage: original.slippage,
+      overrideNetPnl: original.pnlOverridden ? original.netPnl : null,
+    };
+    const reversal = calculateReversal(ledgerInput, {
+      ...input,
+      closeNotes: `Reversal close${noteSuffix}`,
+      entryNotes: `Reversal from ${original.displayId}${noteSuffix}`,
+    });
+
+    const existingPath = await tx.select().from(tradePricePoints).where(eq(tradePricePoints.tradeId, tradeId));
+    if (existingPath.length) {
+      normalizePricePath(existingPath, {
+        entryAt: reversal.closed.entryAt,
+        exitAt: reversal.closed.exitAt,
+        now: new Date(),
+      });
+    }
+    const existingRiskLevels = await tx.select().from(tradeRiskLevels).where(eq(tradeRiskLevels.tradeId, tradeId));
+    if (existingRiskLevels.length) {
+      normalizeRiskLevels(existingRiskLevels, {
+        entryAt: reversal.closed.entryAt,
+        exitAt: reversal.closed.exitAt,
+        now: new Date(),
+      });
+    }
+
+    await tx.insert(tradeExecutions).values({
+      tradeId,
+      userId,
+      type: reversal.closeExecution.type,
+      price: reversal.closeExecution.price,
+      quantity: reversal.closeExecution.quantity,
+      executedAt: reversal.closeExecution.executedAt,
+      fees: reversal.closeExecution.fees,
+      notes: reversal.closeExecution.notes,
+    });
+    await tx.update(trades).set({
+      entryAt: reversal.closed.entryAt,
+      exitAt: reversal.closed.exitAt,
+      realizedAt: reversal.closed.realizedAt,
+      entryPrice: reversal.closed.entryPrice,
+      exitPrice: reversal.closed.exitPrice,
+      positionSize: reversal.closed.positionSize,
+      lotSize: reversal.closed.lotSize,
+      grossPnl: reversal.closed.metrics.grossPnl,
+      netPnl: reversal.closed.metrics.netPnl,
+      initialRisk: reversal.closed.metrics.initialRisk,
+      plannedRr: reversal.closed.metrics.plannedRr,
+      actualRr: reversal.closed.metrics.actualRr,
+      rMultiple: reversal.closed.metrics.rMultiple,
+      status: "closed",
+      result: reversal.closed.metrics.result,
+      holdingMinutes: reversal.closed.metrics.holdingMinutes,
+      updatedAt: new Date(),
+    }).where(eq(trades.id, tradeId));
+
+    const tagRows = await tx.select({ tagId: tradeTags.tagId }).from(tradeTags).where(eq(tradeTags.tradeId, tradeId));
+    const opposite = original.direction === "long" ? "short" : "long";
+    const entryAt = reversal.entryExecution.executedAt.toISOString();
+    const newPayload: TradePayload = {
+      accountId: original.accountId,
+      reversedFromTradeId: original.id,
+      strategyId: original.strategyId,
+      instrument: original.instrument,
+      marketCategory: original.marketCategory,
+      direction: opposite,
+      tradeType: original.tradeType,
+      session: original.session,
+      timezone: original.timezone,
+      entryAt,
+      status: "open",
+      stopLoss: input.stopLoss,
+      takeProfit: input.takeProfit,
+      contractSize: original.contractSize,
+      tickSize: original.tickSize,
+      tickValue: original.tickValue,
+      pipSize: original.pipSize,
+      pipValue: original.pipValue,
+      commission: "0",
+      swap: "0",
+      slippage: "0",
+      notes: `Reversal from ${original.displayId}${noteSuffix}`,
+      tagIds: tagRows.map((row) => row.tagId),
+      executions: [{
+        type: "entry",
+        price: reversal.entryExecution.price,
+        quantity: reversal.entryExecution.quantity,
+        executedAt: entryAt,
+        fees: reversal.entryExecution.fees,
+        notes: reversal.entryExecution.notes,
+      }],
+    };
+    await createTradeInTx(tx, userId, newPayload, false);
+    await rebuildAccountBalances(tx, account.id);
+    const [originalTrade] = await tx.select().from(trades).where(eq(trades.id, tradeId));
+    const [reversalTrade] = await tx.select().from(trades).where(eq(trades.reversedFromTradeId, tradeId));
+    return { originalTrade, reversalTrade };
+  });
+}
+
 export async function updateTrade(userId: string, tradeId: string, payload: TradePayload) {
   const calculated = calculate(payload);
   return db.transaction(async (tx) => {
@@ -488,6 +627,7 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
     const tagIds = await validateRelations(tx, userId, payload);
     const updatedValues = valuesFor(payload, calculated);
     updatedValues.importBatchId = existing.importBatchId;
+    updatedValues.reversedFromTradeId = existing.reversedFromTradeId;
     updatedValues.sourceKey = existing.sourceKey;
     updatedValues.sourceHash = existing.sourceHash;
 

@@ -14,6 +14,7 @@ import {
 const accountId = "00000000-0000-4000-8000-000000000011";
 const tradeId = "00000000-0000-4000-8000-000000000012";
 const screenshotId = "00000000-0000-4000-8000-000000000013";
+const reversalId = "00000000-0000-4000-8000-000000000014";
 
 function emptyBackup(): BackupEnvelope {
   return {
@@ -52,6 +53,16 @@ test("restore validation rejects cross-workspace references and duplicate IDs be
   const duplicate = emptyBackup();
   duplicate.data.tradingAccounts.push({ id: accountId }, { id: accountId });
   assert.throws(() => validateBackupReferences(duplicate), /duplicate ID/);
+
+  const linked = emptyBackup();
+  linked.data.tradingAccounts.push({ id: accountId });
+  linked.data.trades.push(
+    { id: tradeId, accountId },
+    { id: reversalId, accountId, reversedFromTradeId: tradeId },
+  );
+  assert.equal(validateBackupReferences(linked).trades.size, 2);
+  linked.data.trades[1].reversedFromTradeId = screenshotId;
+  assert.throws(() => validateBackupReferences(linked), /outside this backup/);
 });
 
 test("attachments are required, size checked, and image signatures validated", () => {
