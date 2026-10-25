@@ -4,6 +4,7 @@ import { isValidTimeZone } from "./reporting";
 import { CASH_FLOW_TYPES } from "./cash-flow";
 import { IMPORT_FIELD_KEYS, type ImportColumnMapping } from "./import-mapping";
 import { normalizeCsvHeader } from "./csv";
+import { MAX_PRICE_PATH_POINTS } from "./price-path";
 
 const isBlank = (value: unknown) => value === "" || value === null || value === undefined;
 
@@ -280,6 +281,16 @@ export const tradeReviewSchema = z
       ctx.addIssue({ code: "custom", path: ["nextAction"], message: "Add a next action for follow-up reviews" });
     }
   });
+
+export const pricePathPointSchema = z.object({
+  observedAt: dateTimeString,
+  price: requiredPositive,
+  notes: optionalText(500),
+}).strict();
+
+export const pricePathSchema = z.object({
+  points: z.array(pricePathPointSchema).max(MAX_PRICE_PATH_POINTS),
+}).strict();
 
 export const strategySchema = z.object({
   name: z.string().trim().min(1).max(120),

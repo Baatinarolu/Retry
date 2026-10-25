@@ -116,6 +116,31 @@ export function ExecutionReviewChart({
   );
 }
 
+export function PricePathChart({ data }: { data: Array<{ observedAt: string; price: string }> }) {
+  const rows = data.map((point, index) => ({
+    ...point,
+    label: `#${index + 1}`,
+    priceValue: Number(point.price),
+  }));
+  return (
+    <div className="h-64" aria-label="Recorded market price path">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={rows} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke="var(--line)" strokeDasharray="2 5" vertical={false} />
+          <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} dy={8} />
+          <YAxis tick={tick} axisLine={false} tickLine={false} width={64} domain={["auto", "auto"]} />
+          <Tooltip
+            contentStyle={tooltipStyle}
+            formatter={(value: unknown) => Number(value ?? 0).toFixed(8)}
+            labelFormatter={(_label, payload) => payload[0]?.payload?.observedAt || _label}
+          />
+          <Line type="monotone" dataKey="priceValue" name="recorded price" stroke="var(--accent)" strokeWidth={1.8} dot={{ r: 3 }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function DistBars({ data }: { data: { label: string; value: number }[] }) {
   return (
     <div className="h-56">

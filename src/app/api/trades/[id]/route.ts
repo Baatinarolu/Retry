@@ -5,6 +5,7 @@ import {
   strategies,
   tags,
   tradeExecutions,
+  tradePricePoints,
   tradeTags,
   trades,
   tradingAccounts,
@@ -40,6 +41,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     .from(tradeExecutions)
     .where(eq(tradeExecutions.tradeId, id))
     .orderBy(asc(tradeExecutions.executedAt), asc(tradeExecutions.id));
+  const pricePath = await db.select().from(tradePricePoints)
+    .where(and(eq(tradePricePoints.tradeId, id), eq(tradePricePoints.userId, session!.uid)))
+    .orderBy(asc(tradePricePoints.observedAt), asc(tradePricePoints.id));
   const shots = await db.select().from(screenshots).where(eq(screenshots.tradeId, id));
   const executionReview = executions.length
     ? buildExecutionReview({
@@ -60,7 +64,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         swap: row.trade.swap,
         slippage: row.trade.slippage,
         overrideNetPnl: row.trade.pnlOverridden ? row.trade.netPnl : null,
-      })
+      }, pricePath)
     : null;
   return NextResponse.json({
     trade: {
@@ -70,6 +74,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       psychology: row.psych,
       tags: tagRows.map((t) => t.tag),
       executions,
+      pricePath,
       executionReview,
       screenshots: shots,
     },

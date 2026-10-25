@@ -4,6 +4,7 @@ import {
   calculateExecutionLedger,
   type ExecutionLedgerInput,
 } from "@/lib/execution-ledger";
+import { normalizePricePath, type PricePathPointInput } from "@/lib/price-path";
 
 export type ExecutionReviewPoint = {
   index: number;
@@ -25,6 +26,10 @@ export type ObservedExcursion = {
   r: string | null;
 };
 
+export type MarketPathExcursion = ObservedExcursion & {
+  observedAt: string;
+};
+
 export type ExecutionReview = {
   points: ExecutionReviewPoint[];
   finalGrossPnl: string;
@@ -32,8 +37,14 @@ export type ExecutionReview = {
   targetAttainment: string | null;
   observedMae: ObservedExcursion | null;
   observedMfe: ObservedExcursion | null;
-  /** A best permissible exit cannot be inferred from fills alone. */
-  bestExitEfficiency: null;
+  marketMae: MarketPathExcursion | null;
+  marketMfe: MarketPathExcursion | null;
+  /** Actual gross / best recorded gross; null when no positive benchmark exists. */
+  bestExitEfficiency: string | null;
+  bestExitGrossPnl: string | null;
+  bestExitAt: string | null;
+  bestExitPrice: string | null;
+  pricePathPoints: number;
   notes: string[];
 };
 
@@ -69,13 +80,111 @@ function excursionValue(price: Decimal, money: Decimal, initialRisk: Decimal): O
   };
 }
 
+type MarketPathAnalysis = Pick<
+  ExecutionReview,
+  "marketMae" | "marketMfe" | "bestExitEfficiency" | "bestExitGrossPnl" | "bestExitAt" | "bestExitPrice" | "pricePathPoints"
+>;
+
+function analyzePricePath(input: ExecutionLedgerInput, ledger: ReturnType<typeof calculateExecutionLedger>, path: PricePathPointInput[]): MarketPathAnalysis {
+  const points = normalizePricePath(path, { entryAt: ledger.entryAt, exitAt: ledger.exitAt });
+  const empty: MarketPathAnalysis = {
+    marketMae: null,
+    marketMfe: null,
+    bestExitEfficiency: null,
+    bestExitGrossPnl: null,
+    bestExitAt: null,
+    bestExitPrice: null,
+    pricePathPoints: points.length,
+  };
+  if (!points.length) return empty;
+
+  const initialRisk = decimal(ledger.metrics.initialRisk);
+  let fillIndex = 0;
+  let openQuantity = new Decimal(0);
+  let averageCost = new Decimal(0);
+  let grossPnl = new Decimal(0);
+  let hasExposure = false;
+  let firstExposureAt: Date | null = null;
+  let maePrice = new Decimal(0);
+  let maeMoney = new Decimal(0);
+  let maeAt: Date | null = null;
+  let mfePrice = new Decimal(0);
+  let mfeMoney = new Decimal(0);
+  let mfeAt: Date | null = null;
+  let bestGross: Decimal | null = null;
+  let bestPoint: (typeof points)[number] | null = null;
+
+  for (const point of points) {
+    const time = point.observedAt.getTime();
+    // Entries are effective at the same timestamp before the observation; reductions
+    // are applied afterward, so an exit-timestamp observation can value the open position.
+    while (fillIndex < ledger.executions.length) {
+      const fill = ledger.executions[fillIndex];
+      const fillTime = fill.executedAt.getTime();
+      const isEntry = fill.type === "entry" || fill.type === "scale_in";
+      if (fillTime > time || (fillTime === time && !isEntry)) break;
+      const price = new Decimal(fill.price);
+      const quantity = new Decimal(fill.quantity);
+      if (isEntry) {
+        const nextQuantity = openQuantity.plus(quantity);
+        averageCost = averageCost.mul(openQuantity).plus(price.mul(quantity)).div(nextQuantity);
+        openQuantity = nextQuantity;
+      } else {
+        grossPnl = grossPnl.plus(monetaryMove(input, averageCost, price, quantity));
+        openQuantity = openQuantity.minus(quantity);
+        if (openQuantity.eq(0)) averageCost = new Decimal(0);
+      }
+      fillIndex++;
+    }
+
+    if (openQuantity.lte(0)) continue;
+    hasExposure = true;
+    firstExposureAt ??= point.observedAt;
+    const price = new Decimal(point.price);
+    const move = signedPriceMove(input.direction, averageCost, price);
+    const money = monetaryMove(input, averageCost, price, openQuantity);
+    if (move.lt(0) && money.abs().gt(maeMoney)) {
+      maePrice = move.abs();
+      maeMoney = money.abs();
+      maeAt = point.observedAt;
+    } else if (move.gt(0) && money.gt(mfeMoney)) {
+      mfePrice = move;
+      mfeMoney = money;
+      mfeAt = point.observedAt;
+    }
+
+    if (input.status === "closed") {
+      const hypotheticalGross = grossPnl.plus(money);
+      if (bestGross === null || hypotheticalGross.gt(bestGross)) {
+        bestGross = hypotheticalGross;
+        bestPoint = point;
+      }
+    }
+  }
+
+  const actualGross = decimal(ledger.metrics.grossPnl);
+  return {
+    marketMae: hasExposure
+      ? { ...excursionValue(maePrice, maeMoney, initialRisk), observedAt: (maeAt ?? firstExposureAt)!.toISOString() }
+      : null,
+    marketMfe: hasExposure
+      ? { ...excursionValue(mfePrice, mfeMoney, initialRisk), observedAt: (mfeAt ?? firstExposureAt)!.toISOString() }
+      : null,
+    bestExitEfficiency: bestGross && bestGross.gt(0) ? actualGross.div(bestGross).toFixed(6) : null,
+    bestExitGrossPnl: bestGross?.toFixed(4) ?? null,
+    bestExitAt: bestPoint?.observedAt.toISOString() ?? null,
+    bestExitPrice: bestPoint?.price ?? null,
+    pricePathPoints: points.length,
+  };
+}
+
 /**
  * Replays the same weighted-average execution model as the ledger for review UI.
- * This is deliberately not a market-data MAE/MFE or best-exit calculator: only
- * prices at recorded fills are observed, and running P&L is realized P&L.
+ * Fill-only excursions remain separate from optional recorded-market-path analysis.
  */
-export function buildExecutionReview(input: ExecutionLedgerInput): ExecutionReview {
+export function buildExecutionReview(input: ExecutionLedgerInput, pricePath: PricePathPointInput[] = []): ExecutionReview {
   const ledger = calculateExecutionLedger(input);
+  const marketPath = analyzePricePath(input, ledger, pricePath);
   const tradeCosts = decimal(input.commission).plus(decimal(input.swap)).plus(decimal(input.slippage));
   const hasOverride = input.overrideNetPnl !== null && input.overrideNetPnl !== undefined && input.overrideNetPnl !== "";
   const initialRisk = decimal(ledger.metrics.initialRisk);
@@ -149,6 +258,18 @@ export function buildExecutionReview(input: ExecutionLedgerInput): ExecutionRevi
     }
   }
 
+  const notes = [
+    "Running P&L includes realized fills and fees; it excludes unrealized P&L on any remaining position.",
+    "Observed MAE/MFE use execution prices only and are not intratrade market-path excursions.",
+  ];
+  if (marketPath.pricePathPoints) {
+    notes.push("Market MAE/MFE use only the recorded price path; unrecorded ticks are not inferred.");
+    notes.push("Best recorded exit is a gross counterfactual using realized prior exits and the open quantity at each path point; no extra fees or slippage are invented.");
+    notes.push("At equal timestamps, entries apply before the price observation and reductions afterward. The actual-gross/best-recorded-gross ratio can exceed 100% when the path is incomplete.");
+  } else {
+    notes.push("Add a time-ordered price path for market MAE/MFE and recorded-path exit analysis; neither is inferred from fills.");
+  }
+
   return {
     points,
     finalGrossPnl: ledger.metrics.grossPnl,
@@ -156,11 +277,7 @@ export function buildExecutionReview(input: ExecutionLedgerInput): ExecutionRevi
     targetAttainment,
     observedMae: hasExcursionObservation ? excursionValue(maePrice, maeMoney, initialRisk) : null,
     observedMfe: hasExcursionObservation ? excursionValue(mfePrice, mfeMoney, initialRisk) : null,
-    bestExitEfficiency: null,
-    notes: [
-      "Running P&L includes realized fills and fees; it excludes unrealized P&L on any remaining position.",
-      "MAE/MFE are execution-observed excursions, not intratrade market-path excursions.",
-      "Best-exit efficiency needs a time-ordered market price path and is not inferred from fills.",
-    ],
+    ...marketPath,
+    notes,
   };
 }

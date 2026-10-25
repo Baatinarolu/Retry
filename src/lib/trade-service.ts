@@ -7,6 +7,7 @@ import {
   strategies,
   tags,
   tradeExecutions,
+  tradePricePoints,
   tradeTags,
   trades,
   tradingAccounts,
@@ -16,6 +17,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { buildAccountBalanceSnapshots } from "./accounting";
 import { computeTradeMetrics, type Direction } from "./calculations";
 import { calculateExecutionLedger, type ExecutionLedger } from "./execution-ledger";
+import { normalizePricePath } from "./price-path";
 import { deleteScreenshotFiles } from "./screenshot-storage";
 
 export type TradePayload = {
@@ -486,6 +488,16 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
     updatedValues.importBatchId = existing.importBatchId;
     updatedValues.sourceKey = existing.sourceKey;
     updatedValues.sourceHash = existing.sourceHash;
+
+    const existingPath = await tx.select().from(tradePricePoints).where(eq(tradePricePoints.tradeId, tradeId));
+    if (existingPath.length) {
+      if (!calculated.executionBased) throw new Error("Remove the recorded price path before removing executions");
+      normalizePricePath(existingPath, {
+        entryAt: calculated.entryAt,
+        exitAt: calculated.exitAt,
+        now: new Date(),
+      });
+    }
 
     await tx
       .update(trades)

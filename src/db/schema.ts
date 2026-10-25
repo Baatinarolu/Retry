@@ -359,6 +359,28 @@ export const tradeExecutions = pgTable(
   (t) => [index("executions_trade_idx").on(t.tradeId)],
 );
 
+export const tradePricePoints = pgTable(
+  "trade_price_points",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tradeId: uuid("trade_id")
+      .notNull()
+      .references(() => trades.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    price: numeric("price", { precision: 18, scale: 8 }).notNull(),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("price_points_trade_idx").on(t.tradeId),
+    index("price_points_user_idx").on(t.userId),
+    uniqueIndex("price_points_trade_time_idx").on(t.tradeId, t.observedAt),
+  ],
+);
+
 export const tradeTags = pgTable(
   "trade_tags",
   {

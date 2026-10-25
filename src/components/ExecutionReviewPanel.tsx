@@ -3,7 +3,7 @@
 import { ExecutionReviewChart } from "@/components/Charts";
 import { Stat } from "@/components/ui";
 import type { ExecutionReview } from "@/lib/execution-review";
-import { formatMoney, formatPct, formatR } from "@/lib/format";
+import { formatMoney, formatPct, formatR, formatWhen } from "@/lib/format";
 
 export function ExecutionReviewPanel({ review, currency }: { review: ExecutionReview; currency: string }) {
   return (
@@ -33,6 +33,30 @@ export function ExecutionReviewPanel({ review, currency }: { review: ExecutionRe
           hint={review.observedMfe ? `${formatR(review.observedMfe.r)} · execution prices only` : "Needs a second fill"}
         />
       </div>
+      {review.pricePathPoints ? (
+        <div className="stats-grid mx-5 mt-4 grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Recorded-path MAE"
+            value={review.marketMae ? formatMoney(-Number(review.marketMae.money), currency) : "—"}
+            hint={review.marketMae ? `${formatR(review.marketMae.r)} · recorded path only` : "No in-position path observation"}
+          />
+          <Stat
+            label="Recorded-path MFE"
+            value={review.marketMfe ? formatMoney(review.marketMfe.money, currency) : "—"}
+            hint={review.marketMfe ? `${formatR(review.marketMfe.r)} · recorded path only` : "No in-position path observation"}
+          />
+          <Stat
+            label="Best recorded gross"
+            value={formatMoney(review.bestExitGrossPnl, currency)}
+            hint={review.bestExitAt ? `Recorded at ${formatWhen(review.bestExitAt)}` : "Closed-trade counterfactual only"}
+          />
+          <Stat
+            label="Actual / best gross"
+            value={review.bestExitEfficiency === null ? "—" : formatPct(Number(review.bestExitEfficiency))}
+            hint="Recorded-path ratio; not a complete market replay"
+          />
+        </div>
+      ) : null}
       <div className="mt-5 border-t border-[var(--line)] px-5 pt-4">
         <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-[var(--muted)]">
           <span>Price and running realized P&amp;L</span>

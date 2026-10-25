@@ -20,6 +20,7 @@ const guardedRoutes: Record<string, string[]> = {
   "src/app/api/tags/route.ts": ["POST", "DELETE"],
   "src/app/api/trades/[id]/route.ts": ["PATCH", "DELETE"],
   "src/app/api/trades/[id]/review/route.ts": ["PATCH"],
+  "src/app/api/trades/[id]/price-path/route.ts": ["POST", "DELETE"],
   "src/app/api/trades/[id]/screenshots/route.ts": ["POST"],
   "src/app/api/trades/route.ts": ["POST"],
   "src/app/api/views/route.ts": ["POST", "PATCH", "DELETE"],

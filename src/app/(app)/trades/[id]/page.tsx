@@ -2,6 +2,7 @@
 
 import { TradeForm } from "@/components/TradeForm";
 import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
+import { PricePathPanel } from "@/components/PricePathPanel";
 import { TradeReviewPanel } from "@/components/TradeReviewPanel";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
@@ -73,6 +74,18 @@ export default function TradeDetailPage() {
         <Stat label="Plan" value={trade.followedPlan ? "Followed" : "Broke"} />
       </div>
       {trade.executionReview ? <ExecutionReviewPanel review={trade.executionReview} currency={currency} /> : null}
+      {trade.executionReview ? (
+        <PricePathPanel
+          tradeId={id}
+          points={trade.pricePath || []}
+          onSaved={(pricePath) => {
+            setTrade((current: any) => ({ ...current, pricePath }));
+            apiJson<{ trade: any }>(`/api/trades/${id}`)
+              .then((data) => setTrade(data.trade))
+              .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Path saved, but review data could not be refreshed"));
+          }}
+        />
+      ) : null}
       <TradeReviewPanel
         trade={trade}
         onSaved={(review) => setTrade((current: any) => ({ ...current, ...review }))}
