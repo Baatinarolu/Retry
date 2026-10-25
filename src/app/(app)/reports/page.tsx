@@ -80,7 +80,8 @@ export default function ReportsPage() {
         </div>
         <div className="flex gap-2 no-print">
           <a className="btn btn-ghost" href={`/api/export?format=csv&${ws.qs}`}>CSV export</a>
-          <a className="btn btn-ghost" href={`/api/export?format=json&${ws.qs}`}>JSON backup</a>
+          <a className="btn btn-ghost" href={`/api/export?format=json&${ws.qs}`}>Trade JSON</a>
+          <a className="btn btn-ghost" href="/api/backup">Full backup</a>
           <Button variant="ghost" onClick={() => window.print()}>Print / PDF</Button>
         </div>
       </div>

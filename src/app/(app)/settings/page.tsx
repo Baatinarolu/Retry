@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [acc, setAcc] = useState({ name: "Funded account", broker: "", currency: "USD", startingBalance: "5000", accountType: "prop" });
   const [inst, setInst] = useState({ symbol: "", name: "", category: "forex", pipSize: "0.0001", pipValue: "10", tickSize: "0", tickValue: "0", contractSize: "1", quoteCurrency: "USD" });
   const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
 
   function reload() {
     fetch("/api/settings").then((r) => r.json()).then((d) => setUser(d.user));
@@ -34,6 +36,36 @@ export default function SettingsPage() {
     setMsg("Preferences saved.");
   }
 
+  async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const confirmation = window.prompt("This replaces the current workspace. Type RESTORE WORKSPACE to continue.");
+    if (confirmation !== "RESTORE WORKSPACE") {
+      event.target.value = "";
+      return;
+    }
+    setRestoreBusy(true);
+    setError("");
+    setMsg("");
+    try {
+      const backup = JSON.parse(await file.text());
+      const response = await fetch("/api/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation, backup }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not restore workspace");
+      setMsg(`Workspace restored: ${data.accountsRebuilt} accounts and ${data.attachments} attachments. Balances were rebuilt.`);
+      reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not restore workspace");
+    } finally {
+      setRestoreBusy(false);
+      event.target.value = "";
+    }
+  }
+
   if (!user) return null;
 
   return (
@@ -46,6 +78,7 @@ export default function SettingsPage() {
         </div>
       </div>
       {msg ? <Banner tone="good">{msg}</Banner> : null}
+      {error ? <Banner tone="warn">{error}</Banner> : null}
       <Card className="grid gap-3 md:grid-cols-2">
         <Field label="Name"><Input value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} /></Field>
         <Field label="Timezone">
@@ -136,9 +169,14 @@ export default function SettingsPage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Privacy</h2>
-        <p className="text-sm text-[var(--muted)]">Export your data anytime. Deleting the account removes journal records you own.</p>
-        <div className="flex gap-2">
-          <a className="btn btn-ghost" href="/api/export?format=json">Download JSON</a>
+        <p className="text-sm text-[var(--muted)]">Download a versioned full-workspace backup, including executions, settings, cash movements, import batches, and private image attachments. Restore replaces the current workspace after explicit confirmation.</p>
+        <div className="flex flex-wrap gap-2">
+          <a className="btn btn-ghost" href="/api/backup">Download full backup</a>
+          <a className="btn btn-ghost" href="/api/export?format=json">Trade-only JSON</a>
+          <label className={`btn btn-ghost ${restoreBusy ? "opacity-50 pointer-events-none" : ""}`}>
+            {restoreBusy ? "Restoring…" : "Restore backup"}
+            <input className="hidden" type="file" accept=".json,application/json" disabled={restoreBusy} onChange={restoreBackup} />
+          </label>
           <Button
             variant="danger"
             onClick={async () => {
