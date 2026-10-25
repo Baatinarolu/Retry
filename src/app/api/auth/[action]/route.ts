@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { passwordResetTokens, users } from "@/db/schema";
 import { clearSessionCookie, hashPassword, setSessionCookie, verifyPassword } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { passwordResetBaseUrl, passwordResetDeliveryConfigured, sendPasswordResetEmail } from "@/lib/password-reset";
 import { seedDemoTrades } from "@/lib/demo-data";
 import { provisionNewUser } from "@/lib/onboarding";
 import { forgotSchema, loginSchema, resetSchema, signupSchema } from "@/lib/validations";
@@ -94,27 +95,38 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ action: st
   if (action === "forgot") {
     const parsed = forgotSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
-    const [user] = await db.select().from(users).where(eq(users.email, parsed.data.email.toLowerCase().trim()));
-    if (!user) {
-      return NextResponse.json({
-        ok: true,
-        message: "If that email exists, the reset request has been processed.",
-      });
+    const production = process.env.NODE_ENV === "production";
+    const deliveryConfigured = passwordResetDeliveryConfigured();
+    // Do not create unusable production tokens or disclose whether an account exists when delivery is absent.
+    if (production && (!deliveryConfigured || !passwordResetBaseUrl())) {
+      return NextResponse.json({ error: "Password reset delivery is not configured." }, { status: 503 });
     }
+    const genericMessage = "If that email exists, the reset request has been processed.";
+    const [user] = await db.select().from(users).where(eq(users.email, parsed.data.email.toLowerCase().trim()));
+    if (!user) return NextResponse.json({ ok: true, message: genericMessage });
+
     const raw = randomBytes(24).toString("hex");
     const tokenHash = createHash("sha256").update(raw).digest("hex");
-    await db.insert(passwordResetTokens).values({
+    const [resetToken] = await db.insert(passwordResetTokens).values({
       userId: user.id,
       tokenHash,
       expiresAt: new Date(Date.now() + 1000 * 60 * 30),
-    });
-    const development = process.env.NODE_ENV !== "production";
+    }).returning({ id: passwordResetTokens.id });
+    if (deliveryConfigured) {
+      const baseUrl = passwordResetBaseUrl() || req.nextUrl.origin;
+      const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(raw)}`;
+      const delivered = await sendPasswordResetEmail({ email: user.email, resetUrl }).then(() => true).catch(() => false);
+      if (!delivered) {
+        await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, resetToken.id)).catch(() => undefined);
+        return NextResponse.json({ error: "Password reset delivery is temporarily unavailable." }, { status: 503 });
+      }
+      return NextResponse.json({ ok: true, message: genericMessage });
+    }
     return NextResponse.json({
       ok: true,
-      message: development
-        ? "Development reset token created. It is returned once because email delivery is not configured."
-        : "If that email exists, the reset request has been processed.",
-      ...(development ? { token: raw, resetPath: `/reset-password?token=${raw}` } : {}),
+      message: "Development reset token created. It is returned once because email delivery is not configured.",
+      token: raw,
+      resetPath: `/reset-password?token=${raw}`,
     });
   }
 

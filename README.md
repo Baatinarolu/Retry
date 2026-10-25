@@ -110,7 +110,8 @@ See `.env.example`.
 - `DATABASE_URL` — required pooled Neon connection string used by the app and Drizzle Kit. Store the real value only in `.env` or deployment secrets.
 - `AUTH_SECRET` — required in production; use a random value of at least 32 characters.
 - `NEXT_PUBLIC_APP_NAME` — public product name.
-- `NEXT_PUBLIC_APP_URL` — canonical public URL used in metadata.
+- `NEXT_PUBLIC_APP_URL` — canonical public URL used in metadata and production password-reset links.
+- `RESEND_API_KEY` and `PASSWORD_RESET_FROM_EMAIL` — optional server-only Resend HTTPS delivery settings. Configure both together; production reset requests fail closed with 503 until they are present. No email SDK or client credential is required.
 - `AI_PROVIDER` — defaults to `ollama` locally and `rules` on Vercel; `openai` is the optional paid provider.
 - `OLLAMA_BASE_URL` and `OLLAMA_MODEL` — local Ollama endpoint and model; no API key required.
 - `OPENAI_API_KEY` and `OPENAI_MODEL` — optional paid external coach. No language model is called unless the signed-in user has explicitly enabled AI permission.
@@ -143,7 +144,7 @@ A ready-to-use workflow template is included at `docs/db-migrate.yml`. It runs o
 
 ## Production notes
 
-- **Password resets:** development can display a one-time token because no email provider is bundled. Production never returns reset tokens in API responses; connect an email delivery flow before enabling public self-service resets.
+- **Password resets:** development displays a one-time token only when no email provider is configured. With `RESEND_API_KEY`, `PASSWORD_RESET_FROM_EMAIL`, and a valid `NEXT_PUBLIC_APP_URL`, the server sends a 30-minute reset link through Resend's HTTPS API; production responses never contain tokens. Missing production configuration returns 503 before token creation, and failed deliveries invalidate the new token. Live email delivery has not been tested in this sandbox.
 - **Database:** apply migrations before starting the new version. Migration 0001 adds and backfills `trades.realized_at` plus its reporting index; migration 0002 adds the separate `cash_flows` ledger and its idempotency/index constraints; migration 0003 adds import provenance, retained batches, and account-aware source uniqueness; migration 0004 adds shared rate-limit buckets. Existing closed trades and execution reductions are covered by the 0001 backfill.
 - **Uploads:** Vercel uses a private Blob store automatically. Outside Vercel, screenshots use `data/uploads` unless Blob credentials are configured; back up that directory and use a persistent volume for self-hosting.
 - **Rate limits:** auth and AI requests use an atomic fixed-window limiter in PostgreSQL, shared across application instances. Raw IP/user keys are hashed before storage, expired buckets are cleaned opportunistically, and limiter outages return 503 rather than silently bypassing protection. Apply migration 0004 before deploying these code paths.
