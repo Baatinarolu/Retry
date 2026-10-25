@@ -46,12 +46,13 @@ export default function AiCoachPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">AI Coach</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Reviews use your journal statistics. The server can use a local Ollama model with free rule-based fallback. They cannot predict markets or promise profitability.
-        </p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Guided review / Optional assistance</p>
+          <h1>AI Coach</h1>
+          <p className="page-description">Reviews use your journal statistics. The server can use a local Ollama model with free rule-based fallback. They cannot predict markets or promise profitability.</p>
+        </div>
       </div>
       {error ? <Banner tone="warn">{error}</Banner> : null}
       {!permission ? (
@@ -91,7 +92,7 @@ export default function AiCoachPage() {
         <ul className="space-y-2 text-sm">
           {history.map((h) => (
             <li key={h.id}>
-              <button className="text-left text-teal-300" onClick={() => setReview(h)}>
+              <button className="text-left text-[var(--accent)]" onClick={() => setReview(h)}>
                 {h.type} · {new Date(h.createdAt).toLocaleString()} · {h.source}
               </button>
             </li>

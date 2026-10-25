@@ -1,4 +1,4 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "TradeMind Journal";
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "TradeMind";
 export const APP_TAGLINE = "Professional trading performance, psychology, and process.";
 
 export const SESSION_COOKIE = "tm_session";
@@ -76,33 +76,33 @@ export const SCREENSHOT_CATEGORIES = [
 ] as const;
 
 export const ICT_SMC_TAGS: { name: string; category: string; color: string }[] = [
-  { name: "Break of Structure (BOS)", category: "smc", color: "#38bdf8" },
-  { name: "Change of Character (CHoCH)", category: "smc", color: "#818cf8" },
-  { name: "Market Structure Shift (MSS)", category: "smc", color: "#a78bfa" },
-  { name: "Fair Value Gap (FVG)", category: "ict", color: "#2dd4bf" },
-  { name: "Inverse Fair Value Gap (IFVG)", category: "ict", color: "#14b8a6" },
-  { name: "Order Block", category: "smc", color: "#fbbf24" },
-  { name: "Breaker Block", category: "smc", color: "#fb923c" },
-  { name: "Mitigation Block", category: "smc", color: "#f59e0b" },
-  { name: "Liquidity Sweep", category: "ict", color: "#f87171" },
-  { name: "Buy-side Liquidity (BSL)", category: "ict", color: "#34d399" },
-  { name: "Sell-side Liquidity (SSL)", category: "ict", color: "#fb7185" },
-  { name: "Equal Highs / Equal Lows", category: "ict", color: "#94a3b8" },
-  { name: "Premium", category: "ict", color: "#f472b6" },
-  { name: "Discount", category: "ict", color: "#22d3ee" },
-  { name: "Equilibrium", category: "ict", color: "#c084fc" },
-  { name: "Optimal Trade Entry (OTE)", category: "ict", color: "#4ade80" },
-  { name: "Displacement", category: "ict", color: "#60a5fa" },
-  { name: "Inducement", category: "ict", color: "#e879f9" },
-  { name: "Power of Three (PO3)", category: "ict", color: "#facc15" },
-  { name: "Previous Day High / Low", category: "ict", color: "#67e8f9" },
-  { name: "Previous Week High / Low", category: "ict", color: "#7dd3fc" },
-  { name: "Asian Range", category: "ict", color: "#86efac" },
-  { name: "Judas Swing", category: "ict", color: "#fda4af" },
-  { name: "SMT Divergence", category: "ict", color: "#d8b4fe" },
-  { name: "Kill Zone", category: "ict", color: "#fdba74" },
-  { name: "Daily Bias", category: "ict", color: "#5eead4" },
-  { name: "HTF Alignment", category: "ict", color: "#93c5fd" },
+  { name: "Break of Structure (BOS)", category: "smc", color: "#526d6b" },
+  { name: "Change of Character (CHoCH)", category: "smc", color: "#6c7468" },
+  { name: "Market Structure Shift (MSS)", category: "smc", color: "#77776d" },
+  { name: "Fair Value Gap (FVG)", category: "ict", color: "#5d6b50" },
+  { name: "Inverse Fair Value Gap (IFVG)", category: "ict", color: "#7d8b72" },
+  { name: "Order Block", category: "smc", color: "#8b6427" },
+  { name: "Breaker Block", category: "smc", color: "#a04f38" },
+  { name: "Mitigation Block", category: "smc", color: "#8a6a55" },
+  { name: "Liquidity Sweep", category: "ict", color: "#a2483d" },
+  { name: "Buy-side Liquidity (BSL)", category: "ict", color: "#356448" },
+  { name: "Sell-side Liquidity (SSL)", category: "ict", color: "#8a6a55" },
+  { name: "Equal Highs / Equal Lows", category: "ict", color: "#77776d" },
+  { name: "Premium", category: "ict", color: "#8b6427" },
+  { name: "Discount", category: "ict", color: "#526d6b" },
+  { name: "Equilibrium", category: "ict", color: "#6c7468" },
+  { name: "Optimal Trade Entry (OTE)", category: "ict", color: "#5d6b50" },
+  { name: "Displacement", category: "ict", color: "#526d6b" },
+  { name: "Inducement", category: "ict", color: "#a04f38" },
+  { name: "Power of Three (PO3)", category: "ict", color: "#8b6427" },
+  { name: "Previous Day High / Low", category: "ict", color: "#7d8b72" },
+  { name: "Previous Week High / Low", category: "ict", color: "#526d6b" },
+  { name: "Asian Range", category: "ict", color: "#6c7468" },
+  { name: "Judas Swing", category: "ict", color: "#a04f38" },
+  { name: "SMT Divergence", category: "ict", color: "#77776d" },
+  { name: "Kill Zone", category: "ict", color: "#8a6a55" },
+  { name: "Daily Bias", category: "ict", color: "#5d6b50" },
+  { name: "HTF Alignment", category: "ict", color: "#526d6b" },
 ];
 
 export const DEFAULT_INSTRUMENTS = [

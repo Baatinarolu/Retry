@@ -49,10 +49,13 @@ export default function StrategiesPage() {
   if (loading) return <Spinner />;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Strategy Lab</h1>
-        <p className="text-sm text-[var(--muted)]">Performance is historical journal data for linked trades. Versioning preserves older rules.</p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Playbooks / Versioned rules</p>
+          <h1>Strategy Lab</h1>
+          <p className="page-description">Performance is historical journal data for linked trades. Versioning preserves the rules you actually traded.</p>
+        </div>
       </div>
       <Banner>Creating a new version does not rewrite past trades — they stay attached to the version they were logged against.</Banner>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">

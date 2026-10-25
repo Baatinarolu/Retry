@@ -41,15 +41,19 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="card space-y-4 p-6">
-      <h1 className="text-2xl font-semibold">Sign in</h1>
+    <form onSubmit={submit} className="card auth-panel space-y-5 p-6 sm:p-8">
+      <div className="border-b border-[var(--line)] pb-5">
+        <p className="eyebrow mb-2">Return to the record</p>
+        <h1 className="text-4xl">Sign in</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">Your trades, notes, and reviews—in one private workspace.</p>
+      </div>
       <Field label="Email">
         <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </Field>
       <Field label="Password">
         <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </Field>
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="border-l-2 border-[var(--red)] pl-3 text-sm text-[var(--red)]">{error}</p> : null}
       <Button type="submit" loading={loading} className="w-full">
         Continue
       </Button>
@@ -64,11 +68,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4">
-      <div className="w-full space-y-4">
-        <Link href="/" className="flex items-center justify-center gap-2 text-sm text-[var(--muted)]">
-          <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg object-cover" />
-          {APP_NAME}
+    <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4 py-10">
+      <div className="w-full space-y-6">
+        <Link href="/" className="brand-lockup justify-center">
+          <Image src="/logo.png" alt="" width={40} height={40} className="brand-mark h-10 w-10" />
+          <span>
+            <span className="brand-wordmark">{APP_NAME}</span>
+            <span className="brand-subtitle">Trading journal</span>
+          </span>
         </Link>
         <Suspense>
           <LoginForm />

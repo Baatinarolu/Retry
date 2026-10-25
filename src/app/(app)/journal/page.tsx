@@ -32,22 +32,21 @@ export default function JournalPage() {
   }, [workspaceLoading, loadTrades, page, q]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-7">
+      <div className="page-heading">
         <div>
-          <h1 className="text-2xl font-semibold">Trade journal</h1>
-          <p className="text-sm text-[var(--muted)]">Search, filter, and open any stored trade.</p>
+          <p className="eyebrow mb-3">The complete record / Trade ledger</p>
+          <h1>Trade journal</h1>
+          <p className="page-description">Search, filter, and open any stored trade. Every row is a decision worth reviewing.</p>
         </div>
-        <Link href="/trades/new" className="btn btn-primary">
-          Add trade
-        </Link>
+        <Link href="/trades/new" className="btn btn-primary">Add trade</Link>
       </div>
-      <Card>
+      <section className="filter-panel" aria-label="Trade filters">
         <Filters value={ws.filters} onChange={(f) => { ws.setFilters(f); setPage(1); }} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
-        <div className="mt-3">
-          <Input placeholder="Search instrument, ID, notes…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+        <div className="mt-4 border-t border-[var(--line)] pt-4">
+          <Input aria-label="Search trades" placeholder="Search instrument, ID, notes…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
         </div>
-      </Card>
+      </section>
       {ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : null}
       {!data && !error ? <Spinner /> : null}
       {data && data.trades.length === 0 ? (
@@ -75,7 +74,7 @@ export default function JournalPage() {
                   return (
                     <tr key={t.id}>
                       <td>
-                        <Link href={`/trades/${t.id}`} className="text-teal-300">
+                        <Link href={`/trades/${t.id}`}>
                           {t.displayId}
                         </Link>
                       </td>
@@ -84,7 +83,7 @@ export default function JournalPage() {
                       <td className="capitalize">{t.direction}</td>
                       <td className={`font-mono-num ${pnlClass(t.netPnl)}`}>{formatMoney(t.netPnl, ws.currency)}</td>
                       <td className="font-mono-num">{formatR(t.rMultiple)}</td>
-                      <td><span className={`rounded-full px-2 py-0.5 text-xs ${b.className}`}>{b.label}</span></td>
+                      <td><span className={`badge ${b.className}`}>{b.label}</span></td>
                       <td>{t.followedPlan ? "Yes" : "No"}</td>
                     </tr>
                   );

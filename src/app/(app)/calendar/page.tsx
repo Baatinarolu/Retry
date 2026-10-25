@@ -78,21 +78,22 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       {ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="page-heading">
         <div>
-          <h1 className="text-2xl font-semibold">Calendar</h1>
-          <p className="text-sm text-[var(--muted)]">Realized net P&L by exit date. Day details use the same filters as the heat map.</p>
+          <p className="eyebrow mb-3">Daily record / Realized outcomes</p>
+          <h1>Calendar</h1>
+          <p className="page-description">Realized net P&amp;L by exit date. Day details use the same filters as the heat map.</p>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={colorBlind} onChange={(e) => setColorBlind(e.target.checked)} />
           Color-blind palette
         </label>
       </div>
-      <Card>
+      <section className="filter-panel" aria-label="Calendar filters">
         <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
-      </Card>
+      </section>
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <Button variant="ghost" onClick={() => setCursor((d) => addMonths(d, -1))}>Prev</Button>
@@ -108,21 +109,18 @@ export default function CalendarPage() {
             const rec = map.get(iso);
             const intensity = rec ? Math.min(1, Math.abs(rec.pnl) / maxAbs) : 0;
             const pos = (rec?.pnl || 0) >= 0;
+            const strength = Math.round(12 + intensity * 55);
             const bg = !rec
-              ? "var(--bg-card-2)"
+              ? "var(--surface)"
               : colorBlind
-                ? pos
-                  ? `rgba(56,189,248,${0.15 + intensity * 0.55})`
-                  : `rgba(251,191,36,${0.15 + intensity * 0.55})`
-                : pos
-                  ? `rgba(52,211,153,${0.12 + intensity * 0.55})`
-                  : `rgba(248,113,113,${0.12 + intensity * 0.55})`;
+                ? `color-mix(in oklab, ${pos ? "var(--blue)" : "var(--gold)"} ${strength}%, var(--surface))`
+                : `color-mix(in oklab, ${pos ? "var(--green)" : "var(--red)"} ${strength}%, var(--surface))`;
             const outside = d.getMonth() !== cursor.getMonth();
             return (
               <button
                 key={iso}
                 onClick={() => openDay(iso)}
-                className="min-h-20 rounded-xl p-2 text-left"
+                className="min-h-20 border border-transparent p-2 text-left transition-colors hover:border-[var(--line-strong)]"
                 style={{ background: bg, opacity: outside ? 0.45 : 1 }}
                 aria-label={`${iso} ${rec ? rec.pnl : "no trades"}`}
               >

@@ -34,7 +34,7 @@ export function DemoButton({ className }: { className?: string }) {
       >
         Explore demo journal
       </Button>
-      {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-[var(--red)]">{error}</p> : null}
     </div>
   );
 }

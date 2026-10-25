@@ -65,10 +65,13 @@ export default function RiskPage() {
   if (!settings) return error ? <Banner tone="warn">{error}</Banner> : null;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Risk management</h1>
-        <p className="text-sm text-[var(--muted)]">Limits are warnings only. This app never places or modifies broker orders.</p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Guardrails / Before the next trade</p>
+          <h1>Risk management</h1>
+          <p className="page-description">Limits are warnings only. This app never places or modifies broker orders.</p>
+        </div>
       </div>
       {error ? <Banner tone="warn">{error}</Banner> : null}
       {message ? <Banner tone="good">{message}</Banner> : null}

@@ -47,8 +47,8 @@ export function formatR(value: string | number | null | undefined): string {
 
 export function pnlClass(value: string | number | null | undefined): string {
   const n = typeof value === "number" ? value : Number(value ?? 0);
-  if (!Number.isFinite(n) || n === 0) return "text-zinc-300";
-  return n > 0 ? "text-emerald-400" : "text-rose-400";
+  if (!Number.isFinite(n) || n === 0) return "text-[var(--muted)]";
+  return n > 0 ? "text-[var(--green)]" : "text-[var(--red)]";
 }
 
 export function formatDurationMinutes(mins: number | null | undefined): string {
@@ -74,7 +74,7 @@ export function relativeWhen(iso: string | Date): string {
 }
 
 export function resultBadge(result: string): { label: string; className: string } {
-  if (result === "win") return { label: "Win", className: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30" };
-  if (result === "loss") return { label: "Loss", className: "bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30" };
-  return { label: "B/E", className: "bg-zinc-500/15 text-zinc-300 ring-1 ring-zinc-500/30" };
+  if (result === "win") return { label: "Win", className: "badge-win" };
+  if (result === "loss") return { label: "Loss", className: "badge-loss" };
+  return { label: "B/E", className: "badge-neutral" };
 }

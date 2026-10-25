@@ -128,10 +128,13 @@ export default function BacktestingPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Manual backtesting journal</h1>
-        <p className="text-sm text-[var(--muted)]">Simulated results are stored separately from live trades. Statistics are calculated in R.</p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Research / Simulated record</p>
+          <h1>Manual backtesting</h1>
+          <p className="page-description">Simulated results are stored separately from live trades. Statistics are calculated in R.</p>
+        </div>
       </div>
       <Banner tone="warn">Record only information available at the decision. Look-ahead bias is a process error, not a feature.</Banner>
       {error ? <Banner tone="warn">{error}</Banner> : null}
@@ -155,7 +158,7 @@ export default function BacktestingPage() {
           <ul className="mt-5 space-y-2 text-sm">
             {list.map((backtest) => (
               <li key={backtest.id}>
-                <button className="text-left text-teal-300" onClick={() => open(backtest.id).catch((cause) => setError(cause.message))}>
+                <button className="text-left text-[var(--accent)]" onClick={() => open(backtest.id).catch((cause) => setError(cause.message))}>
                   {backtest.name} · {backtest.instrument}
                 </button>
               </li>
@@ -167,7 +170,7 @@ export default function BacktestingPage() {
           {active ? (
             <div className="space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.12em] text-amber-300">Simulated</p>
+                <p className="eyebrow text-[var(--gold)]">Simulated</p>
                 <h2 className="text-xl font-semibold">{active.name}</h2>
                 <p className="text-sm text-[var(--muted)]">{active.instrument} {active.timeframe} · {active.startDate} → {active.endDate}</p>
               </div>
@@ -203,7 +206,7 @@ export default function BacktestingPage() {
                 {trades.map((trade) => (
                   <li key={trade.id} className="flex items-center justify-between gap-3 border-b border-[var(--border)] py-2">
                     <span>{trade.direction} · {trade.informationAtDecision || trade.notes || "No decision notes"}</span>
-                    <span className="flex items-center gap-3">{formatR(trade.resultR)}<button className="text-rose-300" onClick={() => deleteTrade(trade.id)}>Delete</button></span>
+                    <span className="flex items-center gap-3">{formatR(trade.resultR)}<button className="text-[var(--red)]" onClick={() => deleteTrade(trade.id)}>Delete</button></span>
                   </li>
                 ))}
               </ul>

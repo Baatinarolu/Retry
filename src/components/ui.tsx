@@ -24,20 +24,12 @@ export function Button({
   );
 }
 
-export function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{label}</span>
+      <span className="eyebrow">{label}</span>
       {children}
-      {hint ? <span className="block text-xs text-[var(--muted)]">{hint}</span> : null}
+      {hint ? <span className="block text-xs leading-5 text-[var(--muted)]">{hint}</span> : null}
     </label>
   );
 }
@@ -55,7 +47,8 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn("card p-5", className)}>{children}</section>;
+  const unpadded = className?.split(/\s+/).includes("p-0");
+  return <section className={cn("card", !unpadded && "p-5", className)}>{children}</section>;
 }
 
 export function Stat({
@@ -70,73 +63,41 @@ export function Stat({
   tone?: "up" | "down" | "neutral";
 }) {
   return (
-    <div className="card-quiet p-4">
-      <p className="text-xs uppercase tracking-[0.08em] text-[var(--muted)]">{label}</p>
-      <p
-        className={cn(
-          "mt-2 font-mono-num text-xl font-semibold",
-          tone === "up" && "text-emerald-400",
-          tone === "down" && "text-rose-400",
-        )}
-      >
+    <div className="stat">
+      <p className="eyebrow">{label}</p>
+      <p className={cn("stat-value", tone === "up" && "text-[var(--green)]", tone === "down" && "text-[var(--red)]")}>
         {value}
       </p>
-      {hint ? <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p> : null}
+      {hint ? <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{hint}</p> : null}
     </div>
   );
 }
 
-export function Empty({
-  title,
-  body,
-  action,
-}: {
-  title: string;
-  body: string;
-  action?: ReactNode;
-}) {
+export function Empty({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-      <Image
-        src="/empty-journal.png"
-        alt=""
-        width={128}
-        height={128}
-        className="mb-6 h-32 w-32 rounded-2xl object-cover opacity-80"
-      />
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 max-w-md text-sm text-[var(--muted)]">{body}</p>
+      <Image src="/empty-journal.png" alt="" width={112} height={112} className="brand-mark mb-6 h-28 w-28" />
+      <p className="eyebrow">Blank page</p>
+      <h3 className="mt-2 text-2xl">{title}</h3>
+      <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">{body}</p>
       {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }
 
 export function Banner({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "warn" | "good" }) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border px-4 py-3 text-sm",
-        tone === "info" && "border-[var(--border)] bg-[var(--bg-card-2)] text-[var(--muted)]",
-        tone === "warn" && "border-amber-500/30 bg-amber-500/10 text-amber-200",
-        tone === "good" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("banner", tone === "warn" && "banner-warn", tone === "good" && "banner-good")}>{children}</div>;
 }
 
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", className)}>{children}</span>
-  );
+  return <span className={cn("badge", className)}>{children}</span>;
 }
 
 export function Spinner({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-16 text-[var(--muted)]">
-      <Loader2 className="h-5 w-5 animate-spin" />
-      <span className="text-sm">{label}</span>
+    <div className="flex items-center justify-center gap-3 py-16 text-[var(--muted)]">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span className="eyebrow">{label}</span>
     </div>
   );
 }

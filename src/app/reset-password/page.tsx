@@ -32,8 +32,9 @@ function ResetForm() {
   }
 
   return (
-    <form onSubmit={submit} className="card w-full space-y-4 p-6">
-      <h1 className="text-2xl font-semibold">New password</h1>
+    <form onSubmit={submit} className="card auth-panel w-full space-y-4 p-6 sm:p-8">
+      <p className="eyebrow">Account recovery</p>
+      <h1 className="text-4xl">New password</h1>
       <Field label="Token">
         <Input value={token} onChange={(e) => setToken(e.target.value)} required />
       </Field>

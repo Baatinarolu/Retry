@@ -444,7 +444,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_0.9fr]">
         <section className="card space-y-4 p-5">
-          <h2 className="text-lg font-semibold">Execution</h2>
+          <div className="card-heading"><h2>Execution</h2><span>01 / Trade record</span></div>
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Account">
               <Select value={form.accountId} onChange={(e) => set("accountId", e.target.value)} required>
@@ -550,7 +550,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
               <Input value={form.slippage} onChange={(e) => set("slippage", e.target.value)} />
             </Field>
           </div>
-          <details className="rounded-xl border border-[var(--border)] p-3">
+          <details className="editorial-details">
             <summary className="cursor-pointer text-sm text-[var(--muted)]">Contract specification (do not assume one size fits all)</summary>
             <div className="mt-3 grid gap-3 md:grid-cols-5">
               <Field label="Contract size"><Input value={form.contractSize} onChange={(e) => set("contractSize", e.target.value)} /></Field>
@@ -572,7 +572,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
         </section>
 
         <aside className="card h-fit space-y-3 p-5">
-          <h2 className="text-lg font-semibold">Calculator</h2>
+          <div className="card-heading"><h2>Calculator</h2><span>Live preview</span></div>
           <p className="text-xs text-[var(--muted)]">Uses your contract spec. Override if the broker fill differs.</p>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Gross</p><p className="font-mono-num">{formatMoney(metrics.grossPnl, currency)}</p></div>
@@ -586,7 +586,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
       </div>
 
       <section className="card space-y-4 p-5">
-        <h2 className="text-lg font-semibold">Strategy &amp; setup</h2>
+        <div className="card-heading"><h2>Strategy &amp; setup</h2><span>02 / The thesis</span></div>
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="Strategy">
             <Select value={form.strategyId} onChange={(e) => set("strategyId", e.target.value)}>
@@ -619,10 +619,11 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
                   type="button"
                   key={t.id}
                   onClick={() => setTagIds((ids) => (on ? ids.filter((i) => i !== t.id) : [...ids, t.id]))}
-                  className="rounded-full px-3 py-1 text-xs"
+                  className="badge px-3 py-1.5"
                   style={{
-                    background: on ? `${t.color}33` : "var(--bg-elev)",
-                    border: `1px solid ${on ? t.color : "var(--border)"}`,
+                    background: on ? "var(--accent-wash)" : "transparent",
+                    border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+                    color: on ? "var(--accent)" : "var(--muted)",
                   }}
                 >
                   {t.name}
@@ -640,7 +641,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
       </section>
 
       <section className="card space-y-4 p-5">
-        <h2 className="text-lg font-semibold">Partials &amp; scaling</h2>
+        <div className="card-heading"><h2>Partials &amp; scaling</h2><span>03 / Executions</span></div>
         <p className="text-sm text-[var(--muted)]">Record multiple entries or scale-outs. These do not auto-recalculate blended P&amp;L unless you override net P&amp;L.</p>
         {executions.map((ex, i) => (
           <div key={i} className="grid gap-2 md:grid-cols-6">
@@ -663,7 +664,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
       </section>
 
       <section className="card space-y-4 p-5">
-        <h2 className="text-lg font-semibold">Psychology</h2>
+        <div className="card-heading"><h2>Psychology</h2><span>04 / Process</span></div>
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="Before">
             <Select value={form.emotionBefore} onChange={(e) => set("emotionBefore", e.target.value)}>
@@ -704,7 +705,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
       </section>
 
       <section className="card space-y-4 p-5">
-        <h2 className="text-lg font-semibold">Chart screenshots</h2>
+        <div className="card-heading"><h2>Chart screenshots</h2><span>05 / Visual evidence</span></div>
         {!tradeId ? <p className="text-sm text-[var(--muted)]">Save the trade to upload private screenshots. They are served only to your account.</p> : null}
         {tradeId ? (
           <ShotUploader onUpload={uploadShot} />
@@ -726,7 +727,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
                 <span>{s.category}{s.caption ? ` · ${s.caption}` : ""}</span>
                 <button
                   type="button"
-                  className="text-rose-300"
+                  className="text-[var(--red)]"
                   onClick={async () => {
                     await fetch(`/api/screenshots/${s.id}`, { method: "DELETE" });
                     setShots((xs) => xs.filter((x) => x.id !== s.id));
@@ -746,13 +747,13 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
               width={1600}
               height={1200}
               unoptimized
-              className="h-auto max-h-full w-auto max-w-full rounded-xl"
+              className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
             />
           </div>
         ) : null}
       </section>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 border-t border-[var(--line-strong)] pt-5">
         <Button type="submit" loading={saving}>{tradeId ? "Update trade" : "Save trade"}</Button>
         <Button type="button" variant="ghost" onClick={persistDraft}>Save local draft</Button>
       </div>

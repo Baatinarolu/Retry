@@ -43,14 +43,17 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4">
-      <form onSubmit={submit} className="card w-full space-y-4 p-6">
-        <Link href="/" className="flex items-center gap-2 text-sm text-[var(--muted)]">
-          <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg object-cover" />
-          {APP_NAME}
+    <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4 py-10">
+      <form onSubmit={submit} className="card auth-panel w-full space-y-4 p-6 sm:p-8">
+        <Link href="/" className="brand-lockup mb-3">
+          <Image src="/logo.png" alt="" width={38} height={38} className="brand-mark h-[38px] w-[38px]" />
+          <span className="brand-wordmark">{APP_NAME}</span>
         </Link>
-        <h1 className="text-2xl font-semibold">Create your journal</h1>
-        <p className="text-sm text-[var(--muted)]">Passwords are hashed. Each account only sees its own trades.</p>
+        <div className="border-b border-[var(--line)] pb-5">
+          <p className="eyebrow mb-2">Begin a better record</p>
+          <h1 className="text-4xl">Create your journal</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Passwords are hashed. Each account only sees its own trades.</p>
+        </div>
         <Field label="Name">
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         </Field>
@@ -74,7 +77,7 @@ export default function SignupPage() {
             ))}
           </Select>
         </Field>
-        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        {error ? <p className="border-l-2 border-[var(--red)] pl-3 text-sm text-[var(--red)]">{error}</p> : null}
         <Button type="submit" loading={loading} className="w-full">
           Create account
         </Button>

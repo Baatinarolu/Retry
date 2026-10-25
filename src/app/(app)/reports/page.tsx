@@ -40,11 +40,12 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-7">
+      <div className="page-heading">
         <div>
-          <h1 className="text-2xl font-semibold">Reports &amp; data</h1>
-          <p className="text-sm text-[var(--muted)]">Print-friendly review, CSV/JSON export, and validated import.</p>
+          <p className="eyebrow mb-3">Archive / Portable records</p>
+          <h1>Reports &amp; data</h1>
+          <p className="page-description">A print-friendly review, CSV/JSON export, and validated import. Your journal remains portable.</p>
         </div>
         <div className="flex gap-2 no-print">
           <a className="btn btn-ghost" href={`/api/export?format=csv&${ws.qs}`}>CSV export</a>
@@ -52,9 +53,9 @@ export default function ReportsPage() {
           <Button variant="ghost" onClick={() => window.print()}>Print / PDF</Button>
         </div>
       </div>
-      <Card className="no-print">
+      <section className="filter-panel no-print" aria-label="Report filters">
         <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
-      </Card>
+      </section>
       {report ? (
         <Card>
           <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{APP_NAME}</p>

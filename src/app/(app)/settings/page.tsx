@@ -26,18 +26,23 @@ export default function SettingsPage() {
 
   async function saveUser() {
     await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(user) });
-    document.documentElement.classList.toggle("light", user.theme === "light");
-    document.documentElement.classList.toggle("dark", user.theme !== "light");
+    const theme = user.theme === "light" ? "light" : "dark";
+    document.documentElement.className = theme;
+    window.localStorage.setItem("tm-theme", theme);
+    window.dispatchEvent(new CustomEvent("tm-theme-change", { detail: theme }));
     setMsg("Preferences saved.");
   }
 
   if (!user) return null;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-[var(--muted)]">Theme, currency, accounts, instrument specs, tags, privacy.</p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Workspace / Preferences &amp; data</p>
+          <h1>Settings</h1>
+          <p className="page-description">Theme, currency, accounts, instrument specifications, tags, and privacy.</p>
+        </div>
       </div>
       {msg ? <Banner tone="good">{msg}</Banner> : null}
       <Card className="grid gap-3 md:grid-cols-2">
@@ -97,7 +102,7 @@ export default function SettingsPage() {
                   <td>{i.category}</td>
                   <td>{i.pipSize}</td>
                   <td>{i.pipValue}</td>
-                  <td><button className="text-rose-300" onClick={async () => { await fetch(`/api/instruments?id=${i.id}`, { method: "DELETE" }); reload(); }}>Remove</button></td>
+                  <td><button className="text-[var(--red)]" onClick={async () => { await fetch(`/api/instruments?id=${i.id}`, { method: "DELETE" }); reload(); }}>Remove</button></td>
                 </tr>
               ))}
             </tbody>
@@ -115,7 +120,7 @@ export default function SettingsPage() {
         <h2 className="font-semibold">Custom tags</h2>
         <div className="flex flex-wrap gap-2">
           {tags.map((t) => (
-            <button key={t.id} className="rounded-full px-3 py-1 text-xs" style={{ border: `1px solid ${t.color}` }} onClick={async () => { await fetch(`/api/tags?id=${t.id}`, { method: "DELETE" }); reload(); }}>
+            <button key={t.id} className="badge px-3 py-1.5 hover:border-[var(--red)] hover:text-[var(--red)]" title="Remove tag" onClick={async () => { await fetch(`/api/tags?id=${t.id}`, { method: "DELETE" }); reload(); }}>
               {t.name}
             </button>
           ))}

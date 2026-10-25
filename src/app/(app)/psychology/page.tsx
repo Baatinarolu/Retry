@@ -29,12 +29,15 @@ export default function PsychologyPage() {
   const a = data.analytics;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Psychology</h1>
-        <p className="text-sm text-[var(--muted)]">Emotional tags vs outcomes. These are journal correlations, not diagnoses or market predictions.</p>
+    <div className="space-y-7">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Behavior / Process review</p>
+          <h1>Psychology</h1>
+          <p className="page-description">Emotional tags versus outcomes. These are journal correlations, not diagnoses or market predictions.</p>
+        </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="stats-grid grid-cols-1 md:grid-cols-3">
         <Stat label="Rule following" value={a.stats.ruleFollowingPct === null ? "—" : `${a.stats.ruleFollowingPct}%`} />
         <Stat label="Plan-break trades" value={a.byPlan.find((p: any) => p.key.startsWith("Broke"))?.stats.totalTrades ?? 0} />
         <Stat label="Tagged mistakes" value={a.mistakes.reduce((s: number, m: any) => s + m.count, 0)} />

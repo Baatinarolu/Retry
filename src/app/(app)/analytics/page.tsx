@@ -36,19 +36,20 @@ export default function AnalyticsPage() {
   const s = a.stats;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       {error ? <Banner tone="warn">{error}</Banner> : null}
-      <div>
-        <h1 className="text-2xl font-semibold">Analytics</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Expectancy in R = (win rate × average winning R) − (loss rate × average losing R). Profit factor is undefined when there are no losses.
-        </p>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow mb-3">Evidence / Performance analysis</p>
+          <h1>Analytics</h1>
+          <p className="page-description">Expectancy in R = (win rate × average winning R) − (loss rate × average losing R). Profit factor is undefined when there are no losses.</p>
+        </div>
       </div>
-      <Card>
+      <section className="filter-panel" aria-label="Analytics filters">
         <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
-      </Card>
+      </section>
       {s.sampleWarning ? <Banner tone="warn">n={s.totalTrades}. Small samples overfit stories.</Banner> : null}
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="stats-grid grid-cols-2 md:grid-cols-4">
         <Stat label="Expectancy R" value={s.expectancyR ?? "n/a"} />
         <Stat label="Avg win R" value={s.averageWinR ?? "—"} />
         <Stat label="Avg loss R" value={s.averageLossR ?? "—"} />

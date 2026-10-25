@@ -1,9 +1,9 @@
 "use client";
 
 import { TradeForm } from "@/components/TradeForm";
-import { Banner, Button, Spinner } from "@/components/ui";
+import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
-import { formatMoney, formatR, formatWhen, pnlClass } from "@/lib/format";
+import { formatMoney, formatR, formatWhen } from "@/lib/format";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -50,27 +50,26 @@ export default function TradeDetailPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-7">
+      <div className="page-heading">
         <div>
-          <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">{trade.displayId}</p>
-          <h1 className="text-2xl font-semibold">{trade.instrument} {trade.direction}</h1>
-          <p className="text-sm text-[var(--muted)]">
-            {formatWhen(trade.entryAt)} → {formatWhen(trade.exitAt)} · {trade.session}
-          </p>
+          <p className="eyebrow mb-3">Trade docket / {trade.displayId}</p>
+          <h1 className="capitalize">{trade.instrument} {trade.direction}</h1>
+          <p className="page-description">{formatWhen(trade.entryAt)} → {formatWhen(trade.exitAt)} · {trade.session}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/journal" className="btn btn-ghost">Back to journal</Link>
           <Button variant="ghost" onClick={() => setEditing((value) => !value)}>{editing ? "Close editor" : "Edit"}</Button>
           <Button variant="danger" onClick={remove}>Delete</Button>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div className="card-quiet p-4"><p className="text-xs text-[var(--muted)]">Net P&L</p><p className={`font-mono-num text-xl ${pnlClass(trade.netPnl)}`}>{formatMoney(trade.netPnl)}</p></div>
-        <div className="card-quiet p-4"><p className="text-xs text-[var(--muted)]">R</p><p className="font-mono-num text-xl">{formatR(trade.rMultiple)}</p></div>
-        <div className="card-quiet p-4"><p className="text-xs text-[var(--muted)]">Result</p><p className="text-xl capitalize">{trade.result}</p></div>
-        <div className="card-quiet p-4"><p className="text-xs text-[var(--muted)]">Plan</p><p className="text-xl">{trade.followedPlan ? "Followed" : "Broke"}</p></div>
+      <div className="stats-grid grid-cols-2 lg:grid-cols-4">
+        <Stat label="Net P&L" value={formatMoney(trade.netPnl)} tone={Number(trade.netPnl) >= 0 ? "up" : "down"} />
+        <Stat label="R multiple" value={formatR(trade.rMultiple)} />
+        <Stat label="Result" value={<span className="capitalize">{trade.result}</span>} />
+        <Stat label="Plan" value={trade.followedPlan ? "Followed" : "Broke"} />
       </div>
-      {trade.notes ? <Banner>{trade.notes}</Banner> : null}
+      {trade.notes ? <aside className="paper-docket p-6 sm:p-8"><p className="eyebrow mb-3">Trader&apos;s note</p><p className="max-w-4xl font-serif text-xl leading-8">{trade.notes}</p></aside> : null}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {(trade.screenshots || []).map((screenshot: any) => (
           <button key={screenshot.id} onClick={() => setZoom(screenshot.id)} className="card-quiet overflow-hidden text-left">
@@ -94,7 +93,7 @@ export default function TradeDetailPage() {
             width={1600}
             height={1200}
             unoptimized
-            className="h-auto max-h-full w-auto max-w-full rounded-xl"
+            className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
           />
         </div>
       ) : null}
