@@ -15,6 +15,13 @@
       "when": 1792939250631,
       "tag": "0001_mute_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792939862148,
+      "tag": "0002_green_supernaut",
+      "breakpoints": true
     }
   ]
 }

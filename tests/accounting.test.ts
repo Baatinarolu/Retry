@@ -64,3 +64,25 @@ test("Decimal running totals do not accumulate binary floating-point drift", () 
   const result = buildAccountBalanceSnapshots("1000", [row("a", "0.10", 1), row("b", "0.20", 2)]);
   assert.equal(result.currentBalance, "1000.30");
 });
+
+test("cash movements affect balances without becoming trading P&L and rebuild after edits", () => {
+  const trades = [row("a", "100", 2), row("b", "-30", 4)];
+  const cashFlows = [
+    { id: "deposit", amount: "500", occurredAt: date(1), createdAt: date(1) },
+    { id: "withdrawal", amount: "-50", occurredAt: date(3), createdAt: date(3) },
+  ];
+  const result = buildAccountBalanceSnapshots("1000", trades, cashFlows);
+  assert.deepEqual(result.snapshots, [
+    { id: "a", balanceBefore: "1500.00", balanceAfter: "1600.00" },
+    { id: "b", balanceBefore: "1550.00", balanceAfter: "1520.00" },
+  ]);
+  assert.equal(result.currentBalance, "1520.00");
+
+  const edited = buildAccountBalanceSnapshots("1000", trades, [
+    cashFlows[0],
+    { ...cashFlows[1], amount: "-20" },
+  ]);
+  assert.equal(edited.currentBalance, "1550.00");
+  const deleted = buildAccountBalanceSnapshots("1000", trades, [cashFlows[0]]);
+  assert.equal(deleted.currentBalance, "1570.00");
+});

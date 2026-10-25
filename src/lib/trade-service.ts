@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import {
+  cashFlows,
   psychologyRecords,
   screenshots,
   strategies,
@@ -343,8 +344,12 @@ export async function rebuildAccountBalances(tx: Tx, accountId: string) {
     })
     .from(trades)
     .where(eq(trades.accountId, accountId));
+  const cashFlowRows = await tx
+    .select({ id: cashFlows.id, amount: cashFlows.amount, occurredAt: cashFlows.occurredAt, createdAt: cashFlows.createdAt })
+    .from(cashFlows)
+    .where(eq(cashFlows.accountId, accountId));
 
-  const { snapshots, currentBalance } = buildAccountBalanceSnapshots(account.startingBalance, rows);
+  const { snapshots, currentBalance } = buildAccountBalanceSnapshots(account.startingBalance, rows, cashFlowRows);
   const byId = new Map(rows.map((row) => [row.id, row]));
 
   for (const snapshot of snapshots) {

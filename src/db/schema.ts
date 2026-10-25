@@ -67,6 +67,32 @@ export const tradingAccounts = pgTable(
   (t) => [index("accounts_user_idx").on(t.userId)],
 );
 
+export const cashFlows = pgTable(
+  "cash_flows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => tradingAccounts.id, { onDelete: "restrict" }),
+    type: text("type").notNull(),
+    /** Signed amount in the account currency; never included in trading P&L. */
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    externalId: text("external_id"),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("cash_flows_user_idx").on(t.userId),
+    index("cash_flows_account_occurred_idx").on(t.accountId, t.occurredAt),
+    uniqueIndex("cash_flows_source_idx").on(t.userId, t.accountId, t.externalId),
+  ],
+);
+
 export const riskSettings = pgTable(
   "risk_settings",
   {

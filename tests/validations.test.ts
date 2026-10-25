@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { journalSchema, riskSchema, settingsSchema, signupSchema, tradeSchema } from "../src/lib/validations";
+import { cashFlowSchema, journalSchema, riskSchema, settingsSchema, signupSchema, tradeSchema } from "../src/lib/validations";
 
 const validTrade = {
   accountId: "123e4567-e89b-42d3-a456-426614174000",
@@ -66,6 +66,19 @@ test("calendar dates and zero-valued risk limits validate correctly", () => {
   assert.equal(risk.success, true);
   assert.equal(settingsSchema.safeParse({ timezone: "America/New_York" }).success, true);
   assert.equal(settingsSchema.safeParse({ timezone: "not/a-timezone" }).success, false);
+});
+
+test("cash-flow validation separates positive cash events from signed adjustments", () => {
+  const base = {
+    accountId: validTrade.accountId,
+    type: "deposit",
+    amount: "100",
+    occurredAt: "2026-01-01T10:00:00.000Z",
+  };
+  assert.equal(cashFlowSchema.safeParse(base).success, true);
+  assert.equal(cashFlowSchema.safeParse({ ...base, amount: "-100" }).success, false);
+  assert.equal(cashFlowSchema.safeParse({ ...base, type: "adjustment", amount: "-100" }).success, true);
+  assert.equal(cashFlowSchema.safeParse({ ...base, type: "adjustment", amount: "0" }).success, false);
 });
 
 test("passwords cannot exceed bcrypt's 72-byte input boundary", () => {

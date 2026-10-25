@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { isValidTimeZone } from "./reporting";
+import { CASH_FLOW_TYPES } from "./cash-flow";
 
 const isBlank = (value: unknown) => value === "" || value === null || value === undefined;
 
@@ -96,6 +97,28 @@ export const accountSchema = z.object({
   notes: z.string().max(2000).optional().default(""),
   isActive: z.boolean().optional().default(true),
 });
+
+export const cashFlowSchema = z
+  .object({
+    accountId: z.string().uuid(),
+    type: z.enum(CASH_FLOW_TYPES),
+    amount: requiredNumeric,
+    occurredAt: dateTimeString,
+    externalId: z.string().trim().max(120).optional().default(""),
+    notes: optionalText(2000),
+  })
+  .superRefine((value, ctx) => {
+    const amount = decimal(value.amount);
+    if (value.type === "adjustment" ? amount.isZero() : amount.lte(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: value.type === "adjustment"
+          ? "An adjustment must be non-zero"
+          : "Enter a positive amount; the cash-flow type supplies its direction",
+      });
+    }
+  });
 
 export const tradeSchema = z
   .object({

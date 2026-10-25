@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { riskSettings, tradingAccounts, users } from "@/db/schema";
+import { cashFlows, riskSettings, trades, tradingAccounts, users } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
 import { rebuildAccountBalances } from "@/lib/trade-service";
 import { accountSchema } from "@/lib/validations";
@@ -53,6 +53,22 @@ export async function PATCH(req: NextRequest) {
   const parsed = accountSchema.partial().extend({ id: z.string().uuid() }).safeParse(body);
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid account");
 
+  if (parsed.data.currency) {
+    const [existing] = await db
+      .select({ currency: tradingAccounts.currency })
+      .from(tradingAccounts)
+      .where(and(eq(tradingAccounts.id, parsed.data.id), eq(tradingAccounts.userId, session!.uid)));
+    if (existing && existing.currency.toUpperCase() !== parsed.data.currency.toUpperCase()) {
+      const [[trade], [cashFlow]] = await Promise.all([
+        db.select({ id: trades.id }).from(trades).where(eq(trades.accountId, parsed.data.id)).limit(1),
+        db.select({ id: cashFlows.id }).from(cashFlows).where(eq(cashFlows.accountId, parsed.data.id)).limit(1),
+      ]);
+      if (trade || cashFlow) {
+        return jsonError("Currency cannot change after account activity. Create a new account or explicitly migrate the ledger.");
+      }
+    }
+  }
+
   const account = await db.transaction(async (tx) => {
     // Match trade writes: one user-level lock protects balances and ledger snapshots.
     await tx.select({ id: users.id }).from(users).where(eq(users.id, session!.uid)).for("update");
@@ -101,6 +117,6 @@ export async function DELETE(req: NextRequest) {
     await db.delete(tradingAccounts).where(eq(tradingAccounts.id, id));
     return NextResponse.json({ ok: true });
   } catch {
-    return jsonError("Cannot delete an account that still has trades. Archive it instead.");
+    return jsonError("Cannot delete an account that still has trades or cash flows. Archive it instead.");
   }
 }

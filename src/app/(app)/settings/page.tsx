@@ -1,5 +1,6 @@
 "use client";
 
+import { CashFlowPanel } from "@/components/CashFlowPanel";
 import { Banner, Button, Card, Field, Input, Select } from "@/components/ui";
 import { CURRENCIES, TIMEZONES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
@@ -88,6 +89,8 @@ export default function SettingsPage() {
           <Button onClick={async () => { await fetch("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(acc) }); reload(); }}>Add</Button>
         </div>
       </Card>
+
+      <CashFlowPanel accounts={accounts} onChanged={reload} />
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Instrument specifications</h2>
