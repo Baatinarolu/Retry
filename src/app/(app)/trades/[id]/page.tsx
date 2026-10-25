@@ -1,6 +1,8 @@
 "use client";
 
 import { TradeForm } from "@/components/TradeForm";
+import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
+import { TradeReviewPanel } from "@/components/TradeReviewPanel";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
 import { formatMoney, formatR, formatWhen } from "@/lib/format";
@@ -38,6 +40,7 @@ export default function TradeDetailPage() {
     );
   }
   if (!trade) return <Spinner />;
+  const currency = trade.accountCurrency || "USD";
 
   async function remove() {
     if (!confirm("Delete this trade? This cannot be undone.")) return;
@@ -64,11 +67,16 @@ export default function TradeDetailPage() {
         </div>
       </div>
       <div className="stats-grid grid-cols-2 lg:grid-cols-4">
-        <Stat label="Net P&L" value={formatMoney(trade.netPnl)} tone={Number(trade.netPnl) >= 0 ? "up" : "down"} />
+        <Stat label="Net P&L" value={formatMoney(trade.netPnl, currency)} tone={Number(trade.netPnl) >= 0 ? "up" : "down"} />
         <Stat label="R multiple" value={formatR(trade.rMultiple)} />
         <Stat label="Result" value={<span className="capitalize">{trade.result}</span>} />
         <Stat label="Plan" value={trade.followedPlan ? "Followed" : "Broke"} />
       </div>
+      {trade.executionReview ? <ExecutionReviewPanel review={trade.executionReview} currency={currency} /> : null}
+      <TradeReviewPanel
+        trade={trade}
+        onSaved={(review) => setTrade((current: any) => ({ ...current, ...review }))}
+      />
       {trade.executions?.length ? (
         <section className="card overflow-hidden">
           <div className="card-heading px-5 pt-5"><h2>Execution ledger</h2><span>{trade.executions.length} fills</span></div>
@@ -82,7 +90,7 @@ export default function TradeDetailPage() {
                     <td>{formatWhen(execution.executedAt)}</td>
                     <td className="font-mono-num">{execution.price}</td>
                     <td className="font-mono-num">{execution.quantity}</td>
-                    <td className="font-mono-num">{formatMoney(execution.fees)}</td>
+                    <td className="font-mono-num">{formatMoney(execution.fees, currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -131,6 +139,9 @@ export default function TradeDetailPage() {
           onSaved={(updated) => {
             setTrade((current: any) => ({ ...current, ...updated }));
             setEditing(false);
+            apiJson<{ trade: any }>(`/api/trades/${id}`)
+              .then((data) => setTrade(data.trade))
+              .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Trade saved, but review data could not be refreshed"));
           }}
         />
       ) : null}

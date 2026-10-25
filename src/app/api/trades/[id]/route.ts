@@ -7,9 +7,11 @@ import {
   tradeExecutions,
   tradeTags,
   trades,
+  tradingAccounts,
 } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
 import { deleteTrade, updateTrade } from "@/lib/trade-service";
+import { buildExecutionReview } from "@/lib/execution-review";
 import { tradeSchema } from "@/lib/validations";
 import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -21,8 +23,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (error) return error;
   const { id } = await ctx.params;
   const [row] = await db
-    .select({ trade: trades, strategyName: strategies.name, psych: psychologyRecords })
+    .select({ trade: trades, strategyName: strategies.name, psych: psychologyRecords, accountCurrency: tradingAccounts.currency })
     .from(trades)
+    .leftJoin(tradingAccounts, eq(tradingAccounts.id, trades.accountId))
     .leftJoin(strategies, eq(strategies.id, trades.strategyId))
     .leftJoin(psychologyRecords, eq(psychologyRecords.tradeId, trades.id))
     .where(and(eq(trades.id, id), eq(trades.userId, session!.uid)));
@@ -38,13 +41,36 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     .where(eq(tradeExecutions.tradeId, id))
     .orderBy(asc(tradeExecutions.executedAt), asc(tradeExecutions.id));
   const shots = await db.select().from(screenshots).where(eq(screenshots.tradeId, id));
+  const executionReview = executions.length
+    ? buildExecutionReview({
+        direction: row.trade.direction as "long" | "short",
+        status: row.trade.status as "open" | "closed",
+        executions: executions.map((execution) => ({
+          ...execution,
+          type: execution.type as "entry" | "scale_in" | "scale_out" | "exit",
+        })),
+        stopLoss: row.trade.stopLoss,
+        takeProfit: row.trade.takeProfit,
+        contractSize: row.trade.contractSize,
+        tickSize: row.trade.tickSize,
+        tickValue: row.trade.tickValue,
+        pipSize: row.trade.pipSize,
+        pipValue: row.trade.pipValue,
+        commission: row.trade.commission,
+        swap: row.trade.swap,
+        slippage: row.trade.slippage,
+        overrideNetPnl: row.trade.pnlOverridden ? row.trade.netPnl : null,
+      })
+    : null;
   return NextResponse.json({
     trade: {
       ...row.trade,
+      accountCurrency: row.accountCurrency,
       strategyName: row.strategyName,
       psychology: row.psych,
       tags: tagRows.map((t) => t.tag),
       executions,
+      executionReview,
       screenshots: shots,
     },
   });

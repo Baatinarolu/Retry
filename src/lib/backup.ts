@@ -150,7 +150,7 @@ const TIMESTAMP_COLUMNS: Partial<Record<BackupTable, string[]>> = {
   strategies: ["createdAt", "updatedAt"],
   tags: ["createdAt"],
   importBatches: ["createdAt", "committedAt", "rolledBackAt"],
-  trades: ["entryAt", "exitAt", "realizedAt", "createdAt", "updatedAt"],
+  trades: ["entryAt", "exitAt", "realizedAt", "reviewedAt", "createdAt", "updatedAt"],
   tradeExecutions: ["executedAt"],
   screenshots: ["createdAt"],
   dailyJournals: ["createdAt", "updatedAt"],

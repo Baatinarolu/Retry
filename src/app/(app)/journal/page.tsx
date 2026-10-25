@@ -66,6 +66,7 @@ export default function JournalPage() {
                   <th>R</th>
                   <th>Result</th>
                   <th>Plan</th>
+                  <th>Review</th>
                 </tr>
               </thead>
               <tbody>
@@ -85,6 +86,9 @@ export default function JournalPage() {
                       <td className="font-mono-num">{formatR(t.rMultiple)}</td>
                       <td><span className={`badge ${b.className}`}>{b.label}</span></td>
                       <td>{t.followedPlan ? "Yes" : "No"}</td>
+                      <td className="whitespace-nowrap text-xs text-[var(--muted)]">
+                        {t.reviewStatus === "needs_follow_up" ? "Follow-up" : t.reviewStatus === "reviewed" ? "Reviewed" : "Unreviewed"}
+                      </td>
                     </tr>
                   );
                 })}

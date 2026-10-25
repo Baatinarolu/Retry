@@ -225,6 +225,17 @@ export const tradeSchema = z
     }
   });
 
+export const tradeReviewSchema = z
+  .object({
+    reviewStatus: z.enum(["unreviewed", "reviewed", "needs_follow_up"]),
+    nextAction: z.string().trim().max(2000).optional().default(""),
+  })
+  .superRefine((value, ctx) => {
+    if (value.reviewStatus === "needs_follow_up" && !value.nextAction) {
+      ctx.addIssue({ code: "custom", path: ["nextAction"], message: "Add a next action for follow-up reviews" });
+    }
+  });
+
 export const strategySchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: optionalText(),

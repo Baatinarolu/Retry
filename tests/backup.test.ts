@@ -70,6 +70,10 @@ test("timestamp revival preserves calendar dates and rejects malformed instants"
   const revived = reviveBackupData(backup.data);
   assert.equal(revived.tradingAccounts[0].createdAt instanceof Date, true);
   assert.equal(revived.dailyJournals[0].journalDate, "2026-01-01");
-  backup.data.trades.push({ id: tradeId, accountId, entryAt: "not-a-date" });
+  backup.data.trades.push({ id: tradeId, accountId, entryAt: "2026-01-01T00:00:00.000Z", reviewedAt: "2026-01-02T00:00:00.000Z", reviewStatus: "reviewed", nextAction: "Wait for confirmation" });
+  const withReview = reviveBackupData(backup.data);
+  assert.equal(withReview.trades[0].reviewedAt instanceof Date, true);
+  assert.equal(withReview.trades[0].nextAction, "Wait for confirmation");
+  backup.data.trades[0].entryAt = "not-a-date";
   assert.throws(() => reviveBackupData(backup.data), /invalid timestamp/);
 });
