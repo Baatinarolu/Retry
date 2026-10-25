@@ -186,6 +186,30 @@ export const tags = pgTable(
   ],
 );
 
+export const importBatches = pgTable(
+  "import_batches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => tradingAccounts.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull().default(""),
+    fileHash: text("file_hash").notNull(),
+    originalCsv: text("original_csv").notNull(),
+    status: text("status").notNull().default("preview"),
+    totalRows: integer("total_rows").notNull().default(0),
+    importedRows: integer("imported_rows").notNull().default(0),
+    rejectedRows: integer("rejected_rows").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    committedAt: timestamp("committed_at", { withTimezone: true }),
+    rolledBackAt: timestamp("rolled_back_at", { withTimezone: true }),
+  },
+  (t) => [index("import_batches_user_idx").on(t.userId), index("import_batches_account_idx").on(t.accountId)],
+);
+
 export const trades = pgTable(
   "trades",
   {
@@ -196,6 +220,9 @@ export const trades = pgTable(
     accountId: uuid("account_id")
       .notNull()
       .references(() => tradingAccounts.id, { onDelete: "restrict" }),
+    importBatchId: uuid("import_batch_id").references(() => importBatches.id, { onDelete: "set null" }),
+    sourceKey: text("source_key"),
+    sourceHash: text("source_hash"),
     strategyId: uuid("strategy_id").references(() => strategies.id, { onDelete: "set null" }),
     displayId: text("display_id").notNull(),
     instrument: text("instrument").notNull(),
@@ -257,7 +284,9 @@ export const trades = pgTable(
     index("trades_user_entry_idx").on(t.userId, t.entryAt),
     index("trades_user_realized_idx").on(t.userId, t.realizedAt),
     index("trades_account_idx").on(t.accountId),
+    index("trades_import_batch_idx").on(t.importBatchId),
     index("trades_instrument_idx").on(t.userId, t.instrument),
+    uniqueIndex("trades_source_idx").on(t.userId, t.accountId, t.sourceKey),
     uniqueIndex("trades_user_display_idx").on(t.userId, t.displayId),
   ],
 );

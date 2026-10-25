@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import {
   cashFlows,
+  importBatches,
   psychologyRecords,
   screenshots,
   strategies,
@@ -19,6 +20,9 @@ import { deleteScreenshotFiles } from "./screenshot-storage";
 
 export type TradePayload = {
   accountId: string;
+  importBatchId?: string | null;
+  sourceKey?: string | null;
+  sourceHash?: string | null;
   strategyId?: string | null;
   instrument: string;
   marketCategory?: string;
@@ -227,6 +231,9 @@ function valuesFor(
 ): Omit<typeof trades.$inferInsert, "userId" | "accountId" | "displayId" | "balanceBefore" | "balanceAfter"> {
   const { closed, entryAt, exitAt, realizedAt, metrics, ledger, executionBased } = calculated;
   return {
+    importBatchId: payload.importBatchId || null,
+    sourceKey: payload.sourceKey || null,
+    sourceHash: payload.sourceHash || null,
     strategyId: payload.strategyId || null,
     instrument: payload.instrument.trim(),
     marketCategory: payload.marketCategory || "forex",
@@ -368,34 +375,86 @@ export async function rebuildAccountBalances(tx: Tx, accountId: string) {
   return currentBalance;
 }
 
-export async function createTrade(userId: string, payload: TradePayload) {
+async function createTradeInTx(tx: Tx, userId: string, payload: TradePayload, rebuild = true) {
   const calculated = calculate(payload);
+  // Serializing writes per user protects balances, ledger snapshots, and display IDs.
+  await lockUser(tx, userId);
+  const account = await lockAccount(tx, userId, payload.accountId);
+  if (payload.sourceKey) {
+    const [existing] = await tx
+      .select({ sourceHash: trades.sourceHash })
+      .from(trades)
+      .where(and(
+        eq(trades.userId, userId),
+        eq(trades.accountId, account.id),
+        eq(trades.sourceKey, payload.sourceKey),
+      ))
+      .limit(1);
+    if (existing) {
+      throw new Error(existing.sourceHash === payload.sourceHash
+        ? "This source row was already imported"
+        : "Source ID was already imported with different content; reconcile it instead of overwriting");
+    }
+  }
+  const tagIds = await validateRelations(tx, userId, payload);
+  const displayId = await nextDisplayId(tx, userId);
+
+  const [trade] = await tx
+    .insert(trades)
+    .values({
+      userId,
+      accountId: account.id,
+      displayId,
+      ...valuesFor(payload, calculated),
+    })
+    .returning();
+
+  const executions = executionValues(trade.id, userId, payload, calculated.ledger);
+  if (executions.length) await tx.insert(tradeExecutions).values(executions);
+  if (tagIds.length) await tx.insert(tradeTags).values(tagIds.map((tagId) => ({ tradeId: trade.id, tagId })));
+  const psychology = psychologyValues(payload);
+  if (psychology) await tx.insert(psychologyRecords).values({ tradeId: trade.id, userId, ...psychology });
+
+  if (!rebuild) return trade;
+  await rebuildAccountBalances(tx, account.id);
+  const [saved] = await tx.select().from(trades).where(eq(trades.id, trade.id));
+  return saved;
+}
+
+export async function createTrade(userId: string, payload: TradePayload) {
+  return db.transaction((tx) => createTradeInTx(tx, userId, payload));
+}
+
+/** Commit one import atomically and rebuild each affected account once. */
+export async function createTradesBatch(userId: string, payloads: TradePayload[], batchId?: string) {
   return db.transaction(async (tx) => {
-    // Serializing writes per user protects balances, ledger snapshots, and display IDs.
     await lockUser(tx, userId);
-    const account = await lockAccount(tx, userId, payload.accountId);
-    const tagIds = await validateRelations(tx, userId, payload);
-    const displayId = await nextDisplayId(tx, userId);
+    const batch = batchId
+      ? (await tx.select().from(importBatches).where(and(eq(importBatches.id, batchId), eq(importBatches.userId, userId))).for("update"))[0]
+      : null;
+    if (batchId && !batch) throw new Error("Import batch not found");
+    if (batch && batch.status !== "preview") throw new Error("This import batch was already committed or rolled back");
 
-    const [trade] = await tx
-      .insert(trades)
-      .values({
-        userId,
-        accountId: account.id,
-        displayId,
-        ...valuesFor(payload, calculated),
-      })
-      .returning();
+    const created: Array<typeof trades.$inferSelect> = [];
+    for (const payload of payloads) {
+      if (batch && payload.accountId !== batch.accountId) throw new Error("Import account changed after preview; preview the file again");
+      created.push(await createTradeInTx(tx, userId, { ...payload, importBatchId: batchId ?? payload.importBatchId }, false));
+    }
+    const accountIds = [...new Set(created.map((trade) => trade.accountId))];
+    for (const accountId of accountIds) await rebuildAccountBalances(tx, accountId);
 
-    const executions = executionValues(trade.id, userId, payload, calculated.ledger);
-    if (executions.length) await tx.insert(tradeExecutions).values(executions);
-    if (tagIds.length) await tx.insert(tradeTags).values(tagIds.map((tagId) => ({ tradeId: trade.id, tagId })));
-    const psychology = psychologyValues(payload);
-    if (psychology) await tx.insert(psychologyRecords).values({ tradeId: trade.id, userId, ...psychology });
-
-    await rebuildAccountBalances(tx, account.id);
-    const [saved] = await tx.select().from(trades).where(eq(trades.id, trade.id));
-    return saved;
+    if (batch) {
+      await tx.update(importBatches).set({
+        status: "committed",
+        importedRows: created.length,
+        rejectedRows: Math.max(0, batch.totalRows - created.length),
+        committedAt: new Date(),
+      }).where(eq(importBatches.id, batch.id));
+    }
+    if (!created.length) return [];
+    const rows = await tx.select().from(trades).where(inArray(trades.id, created.map((trade) => trade.id)));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return created.map((trade) => byId.get(trade.id)!);
   });
 }
 
@@ -414,13 +473,25 @@ export async function updateTrade(userId: string, tradeId: string, payload: Trad
     const destination = payload.accountId === existing.accountId
       ? oldAccount
       : await lockAccount(tx, userId, payload.accountId);
+    if (existing.sourceKey && destination.id !== oldAccount.id) {
+      const [duplicate] = await tx.select({ id: trades.id }).from(trades).where(and(
+        eq(trades.userId, userId),
+        eq(trades.accountId, destination.id),
+        eq(trades.sourceKey, existing.sourceKey),
+      )).limit(1);
+      if (duplicate) throw new Error("Another trade in the destination account already uses this source ID");
+    }
     const tagIds = await validateRelations(tx, userId, payload);
+    const updatedValues = valuesFor(payload, calculated);
+    updatedValues.importBatchId = existing.importBatchId;
+    updatedValues.sourceKey = existing.sourceKey;
+    updatedValues.sourceHash = existing.sourceHash;
 
     await tx
       .update(trades)
       .set({
         accountId: destination.id,
-        ...valuesFor(payload, calculated),
+        ...updatedValues,
         updatedAt: new Date(),
       })
       .where(eq(trades.id, tradeId));

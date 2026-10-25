@@ -12,8 +12,11 @@ export default function ReportsPage() {
   const [report, setReport] = useState<any>(null);
   const [preview, setPreview] = useState<any>(null);
   const [csv, setCsv] = useState("");
+  const [fileName, setFileName] = useState("import.csv");
   const [accountId, setAccountId] = useState("");
   const [message, setMessage] = useState("");
+  const [importError, setImportError] = useState("");
+  const [committedBatchId, setCommittedBatchId] = useState("");
 
   useEffect(() => {
     if (ws.loading) return;
@@ -21,22 +24,50 @@ export default function ReportsPage() {
   }, [ws.loading, ws.qs]);
 
   async function previewImport() {
+    setImportError("");
+    setMessage("");
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csv, accountId }),
+      body: JSON.stringify({ csv, accountId, fileName }),
     });
-    setPreview(await res.json());
+    const data = await res.json();
+    if (!res.ok) {
+      setPreview(null);
+      setImportError(data.error || "Could not preview import");
+      return;
+    }
+    setPreview(data);
   }
 
   async function commitImport() {
+    if (!preview?.batchId) return;
+    setImportError("");
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commit: true, rows: preview.preview, accountId }),
+      body: JSON.stringify({ commit: true, batchId: preview.batchId }),
     });
-    const d = await res.json();
-    setMessage(`Imported ${d.imported}. Rejected ${d.rejected?.length || 0}. Failed rows are never dropped silently.`);
+    const data = await res.json();
+    if (!res.ok) {
+      setImportError(data.error || "Import failed; no valid rows were partially committed");
+      return;
+    }
+    setCommittedBatchId(data.batchId);
+    setMessage(`Imported ${data.imported} of ${data.tradeRecords} trade records. Rejected ${data.rejected?.length || 0}. The batch committed atomically.`);
+  }
+
+  async function rollbackImport() {
+    if (!committedBatchId || !confirm("Delete every trade created by this import batch and rebuild its account balance?")) return;
+    const res = await fetch(`/api/import?id=${encodeURIComponent(committedBatchId)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      setImportError(data.error || "Could not roll back import");
+      return;
+    }
+    setMessage(`Rolled back ${data.deleted} imported trades. The original CSV and reconciliation record remain stored.`);
+    setCommittedBatchId("");
+    setPreview(null);
   }
 
   return (
@@ -79,22 +110,35 @@ export default function ReportsPage() {
       <Card className="no-print space-y-3">
         <h2 className="font-semibold">CSV import</h2>
         <p className="text-sm text-[var(--muted)]">
-          Map common broker columns (symbol, side, open_time, open, close, volume, pnl). Preview before save. Duplicates are flagged.
+          Map common broker columns (symbol, side, open_time, open, close, volume, pnl). Exact source IDs or row hashes make retries idempotent; repeated trades with different content are not rejected as look-alikes.
         </p>
-        <select className="select" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+        <p className="text-xs text-[var(--muted)]">
+          Execution CSV: include <code>trade_id</code> (or <code>position_id</code>) on every fill plus <code>execution_type</code> = entry, scale_in, scale_out, or exit. Fills in one group become one execution-led trade. The original CSV is retained with the batch for reconciliation and rollback.
+        </p>
+        <select className="select" value={accountId} onChange={(e) => { setAccountId(e.target.value); setPreview(null); }}>
           <option value="">Default account</option>
           {ws.accounts.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
-        <textarea className="textarea min-h-40 font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder="symbol,side,open_time,open,close,volume,pnl" />
-        <div className="flex gap-2">
+        <input className="input" type="file" accept=".csv,text/csv" onChange={async (event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            setCsv(await file.text());
+            setFileName(file.name);
+            setPreview(null);
+          }
+        }} />
+        <textarea className="textarea min-h-40 font-mono text-xs" value={csv} onChange={(e) => { setCsv(e.target.value); setPreview(null); }} placeholder="symbol,side,open_time,open,close,volume,pnl" />
+        <div className="flex flex-wrap gap-2">
           <Button onClick={previewImport}>Preview</Button>
-          {preview ? <Button variant="ghost" onClick={commitImport}>Commit valid rows</Button> : null}
+          {preview ? <Button variant="ghost" onClick={commitImport}>Commit valid rows atomically</Button> : null}
+          {committedBatchId ? <Button variant="ghost" onClick={rollbackImport}>Roll back last batch</Button> : null}
         </div>
+        {importError ? <Banner tone="warn">{importError}</Banner> : null}
         {preview ? (
           <div className="text-sm">
-            <p>Valid {preview.valid} · flagged {preview.rejected}</p>
+            <p>Valid {preview.valid} · flagged {preview.rejected} · {preview.sourceRows} source rows → {preview.tradeRecords} trade records{preview.executionMode ? " · execution grouping" : ""}</p>
             <div className="table-wrap mt-2">
               <table className="data">
                 <thead><tr><th>Line</th><th>Instrument</th><th>Issues</th></tr></thead>

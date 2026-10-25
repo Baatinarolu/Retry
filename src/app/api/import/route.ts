@@ -1,236 +1,204 @@
 import { db } from "@/db";
-import { instruments, strategies, trades, tradingAccounts } from "@/db/schema";
-import { jsonError, requireUser } from "@/lib/api";
-import { parseCsv } from "@/lib/csv";
-import { createTrade, type TradePayload } from "@/lib/trade-service";
-import { tradeSchema } from "@/lib/validations";
-import { eq } from "drizzle-orm";
+import { importBatches, instruments, strategies, trades, tradingAccounts } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { createTradesBatch } from "@/lib/trade-service";
+import { createImportBatch, getImportBatch, rollbackImportBatch } from "@/lib/import-service";
+import { prepareImport, type ImportInstrumentSpec, type ImportPreparationOptions } from "@/lib/import-preparation";
+import type { ImportSource } from "@/lib/import-trust";
+import { parseCsv } from "@/lib/csv";
+import { jsonError, requireUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 const MAX_ROWS = 5000;
 const MAX_CSV_CHARS = 2_000_000;
+const MAX_BODY_CHARS = 2_500_000;
 
-type PreviewRow = {
-  line: number;
-  data: Record<string, string>;
-  errors: string[];
-  duplicate: boolean;
-};
+function isUuid(value: string) {
+  return z.string().uuid().safeParse(value).success;
+}
 
-type InstrumentSpec = {
-  category: string;
-  contractSize: string;
-  tickSize: string;
-  tickValue: string;
-  pipSize: string;
-  pipValue: string;
-};
+const importSchema = z.object({
+  commit: z.boolean().optional(),
+  batchId: z.string().uuid().optional(),
+  csv: z.string().max(MAX_CSV_CHARS).optional(),
+  fileName: z.string().max(200).optional(),
+  accountId: z.string().optional(),
+  rows: z.array(z.any()).max(MAX_ROWS).optional(),
+});
 
-type ExistingTrade = { instrument: string; direction: string; entryAt: Date };
-
-const ALIASES: Record<string, string[]> = {
-  instrument: ["instrument", "symbol", "ticker", "pair"],
-  direction: ["direction", "side", "type", "buy_sell"],
-  entryAt: ["entry_at", "entry_time", "open_time", "time", "date"],
-  exitAt: ["exit_at", "exit_time", "close_time"],
-  entryPrice: ["entry_price", "open_price", "open"],
-  exitPrice: ["exit_price", "close_price", "close"],
-  stopLoss: ["stop_loss", "sl"],
-  takeProfit: ["take_profit", "tp"],
-  lotSize: ["lot_size", "lots", "volume", "size", "qty"],
-  positionSize: ["position_size", "quantity"],
-  contractSize: ["contract_size"],
-  tickSize: ["tick_size"],
-  tickValue: ["tick_value"],
-  pipSize: ["pip_size"],
-  pipValue: ["pip_value"],
-  commission: ["commission", "fee", "fees"],
-  swap: ["swap", "swap_fee", "funding"],
-  slippage: ["slippage"],
-  netPnl: ["net_pnl", "pnl", "profit", "net"],
-  session: ["session"],
-  marketCategory: ["market_category", "category"],
-  strategy: ["strategy", "strategy_name"],
-  notes: ["notes", "comment", "comments"],
-};
-
-function pick(row: Record<string, string>, key: string) {
-  for (const name of ALIASES[key] || [key]) {
-    if (row[name] !== undefined && row[name] !== "") return row[name];
+async function resolveAccount(userId: string, requested?: string) {
+  if (requested) {
+    if (!isUuid(requested)) throw new Error("Invalid account ID");
+    const [account] = await db.select().from(tradingAccounts)
+      .where(and(eq(tradingAccounts.id, requested), eq(tradingAccounts.userId, userId))).limit(1);
+    if (!account) throw new Error("Account not found");
+    return account;
   }
-  return "";
+  const [account] = await db.select().from(tradingAccounts)
+    .where(eq(tradingAccounts.userId, userId)).orderBy(desc(tradingAccounts.createdAt)).limit(1);
+  if (!account) throw new Error("Create a trading account first");
+  return account;
 }
 
-function canonicalRow(raw: Record<string, string>, aliased: boolean) {
-  const data: Record<string, string> = {};
-  for (const key of Object.keys(ALIASES)) data[key] = aliased ? pick(raw, key) : String(raw[key] ?? "");
-  return data;
+async function savedSources(userId: string, accountId: string): Promise<ImportSource[]> {
+  const rows = await db.select({ sourceKey: trades.sourceKey, sourceHash: trades.sourceHash }).from(trades)
+    .where(and(eq(trades.userId, userId), eq(trades.accountId, accountId)));
+  return rows.filter((row) => Boolean(row.sourceKey)).map((row) => ({
+    sourceKey: row.sourceKey!,
+    sourceHash: row.sourceHash || "",
+  }));
 }
 
-function directionOf(value: string): "long" | "short" | "" {
-  const direction = value.trim().toLowerCase();
-  if (direction === "short" || direction === "sell" || direction === "s") return "short";
-  if (direction === "long" || direction === "buy" || direction === "b") return "long";
-  return "";
-}
-
-function isDuplicate(existing: ExistingTrade[], data: Record<string, string>, direction: string) {
-  const entryTime = new Date(data.entryAt).getTime();
-  if (!direction || Number.isNaN(entryTime)) return false;
-  return existing.some(
-    (trade) =>
-      trade.instrument.toUpperCase() === data.instrument.trim().toUpperCase() &&
-      trade.direction === direction &&
-      Math.abs(trade.entryAt.getTime() - entryTime) < 60_000,
-  );
-}
-
-function prepareRow(
-  data: Record<string, string>,
-  line: number,
-  accountId: string,
-  instrumentMap: Map<string, InstrumentSpec>,
-  strategyMap: Map<string, string>,
-  existing: ExistingTrade[],
-) {
-  const direction = directionOf(data.direction);
-  const spec = instrumentMap.get(data.instrument.trim().toUpperCase());
-  const errors: string[] = [];
-  if (!direction) errors.push("Direction must be buy/long or sell/short");
-  const strategyName = data.strategy.trim().toLowerCase();
-  const strategyId = strategyName ? strategyMap.get(strategyName) : null;
-  if (strategyName && !strategyId) errors.push("Strategy not found");
-  const wantsClosed = Boolean(data.exitAt || data.exitPrice || data.netPnl);
-  const candidate: TradePayload = {
-    accountId,
-    strategyId: strategyId || null,
-    instrument: data.instrument.trim().toUpperCase(),
-    marketCategory: data.marketCategory || spec?.category || "forex",
-    direction: direction || "long",
-    entryAt: data.entryAt,
-    exitAt: data.exitAt || null,
-    entryPrice: data.entryPrice,
-    exitPrice: data.exitPrice || null,
-    stopLoss: data.stopLoss || null,
-    takeProfit: data.takeProfit || null,
-    lotSize: data.lotSize || data.positionSize || "1",
-    positionSize: data.positionSize || data.lotSize || "1",
-    contractSize: data.contractSize || spec?.contractSize || "1",
-    tickSize: data.tickSize || spec?.tickSize || "0",
-    tickValue: data.tickValue || spec?.tickValue || "0",
-    pipSize: data.pipSize || spec?.pipSize || "0.0001",
-    pipValue: data.pipValue || spec?.pipValue || "10",
-    commission: data.commission || "0",
-    swap: data.swap || "0",
-    slippage: data.slippage || "0",
-    pnlOverridden: data.netPnl !== "",
-    overrideNetPnl: data.netPnl || null,
-    session: data.session || "other",
-    notes: data.notes ? `${data.notes}\nImported from CSV` : "Imported from CSV",
-    status: wantsClosed ? "closed" : "open",
-  };
-  const parsed = tradeSchema.safeParse(candidate);
-  if (!parsed.success) {
-    errors.push(...parsed.error.issues.slice(0, 4).map((issue) => `${issue.path.join(".")}: ${issue.message}`));
-  }
-  const duplicate = isDuplicate(existing, data, direction);
+async function preparationOptions(userId: string): Promise<ImportPreparationOptions> {
+  const [instrumentRows, strategyRows] = await Promise.all([
+    db.select().from(instruments).where(eq(instruments.userId, userId)),
+    db.select().from(strategies).where(eq(strategies.userId, userId)),
+  ]);
   return {
-    preview: { line, data, errors, duplicate } satisfies PreviewRow,
-    payload: parsed.success && errors.length === 0 && !duplicate ? parsed.data : null,
-    duplicate,
-    existing: {
-      instrument: candidate.instrument,
-      direction: candidate.direction,
-      entryAt: new Date(candidate.entryAt),
-    } satisfies ExistingTrade,
+    instrumentMap: new Map<string, ImportInstrumentSpec>(instrumentRows.map((row) => [row.symbol.toUpperCase(), row])),
+    strategyMap: new Map<string, string>(strategyRows.map((row) => [row.name.toLowerCase(), row.id])),
   };
 }
 
-export async function POST(req: NextRequest) {
+async function prepareForAccount(userId: string, accountId: string, rows: Record<string, string>[], lineMap: number[]) {
+  const [sources, options] = await Promise.all([savedSources(userId, accountId), preparationOptions(userId)]);
+  return prepareImport(rows, lineMap, accountId, sources, options);
+}
+
+function publicPreparation(prepared: ReturnType<typeof prepareImport>) {
+  return {
+    preview: prepared.preview,
+    valid: prepared.valid,
+    rejected: prepared.rejected,
+    sourceRows: prepared.sourceRows,
+    tradeRecords: prepared.preview.length,
+    executionMode: prepared.executionMode,
+  };
+}
+
+async function commitPrepared(userId: string, batchId: string, prepared: ReturnType<typeof prepareImport>) {
+  const created = await createTradesBatch(userId, prepared.payloads.map((item) => item.payload), batchId);
+  return NextResponse.json({
+    batchId,
+    imported: created.length,
+    created: created.map((trade) => trade.displayId),
+    ...publicPreparation(prepared),
+    rejected: prepared.preview.filter((row) => row.duplicate || row.errors.length > 0).map((row) => ({
+      ...row,
+      error: [...row.errors, row.duplicate ? "duplicate" : ""].filter(Boolean).join("; "),
+    })),
+    rejectedCount: prepared.rejected,
+    reconciliation: {
+      sourceRows: prepared.sourceRows,
+      tradeRecords: prepared.preview.length,
+      imported: created.length,
+      rejected: prepared.rejected,
+    },
+  });
+}
+
+export async function POST(request: NextRequest) {
   const { session, error } = await requireUser();
   if (error) return error;
-  const body = await req.json().catch(() => null);
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_BODY_CHARS) return jsonError("Import request is too large (2 MB CSV maximum)", 413);
+  const body = await request.json().catch(() => null);
   if (!body) return jsonError("Invalid payload");
+  const parsedBody = importSchema.safeParse(body);
+  if (!parsedBody.success) return jsonError(parsedBody.error.issues[0].message);
 
-  const [accounts, instrumentRows, strategyRows, saved] = await Promise.all([
-    db.select().from(tradingAccounts).where(eq(tradingAccounts.userId, session!.uid)),
-    db.select().from(instruments).where(eq(instruments.userId, session!.uid)),
-    db.select().from(strategies).where(eq(strategies.userId, session!.uid)),
-    db.select({ instrument: trades.instrument, direction: trades.direction, entryAt: trades.entryAt }).from(trades).where(eq(trades.userId, session!.uid)),
-  ]);
-  const account = body.accountId
-    ? accounts.find((candidate) => candidate.id === body.accountId)
-    : accounts[0];
-  if (!account) return jsonError(body.accountId ? "Account not found" : "Create an account first", 404);
-  if (body.csv === undefined && !Array.isArray(body.rows)) return jsonError("csv required");
-
-  const instrumentMap = new Map<string, InstrumentSpec>(
-    instrumentRows.map((row) => [row.symbol.toUpperCase(), row]),
-  );
-  const strategyMap = new Map<string, string>(strategyRows.map((row) => [row.name.toLowerCase(), row.id]));
-
-  if (body.commit) {
-    if (!Array.isArray(body.rows)) return jsonError("Preview rows required");
-    if (body.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
-    const created: string[] = [];
-    const rejected: { line: number; error: string }[] = [];
-    const seen: ExistingTrade[] = [...saved];
-    for (const [index, row] of (body.rows as Partial<PreviewRow>[]).entries()) {
-      const line = Number.isSafeInteger(row.line) && Number(row.line) > 0 ? Number(row.line) : index + 2;
-      if (!row.data || typeof row.data !== "object") {
-        rejected.push({ line, error: "Malformed preview row" });
-        continue;
-      }
-      const data = canonicalRow(row.data, false);
-      const prepared = prepareRow(data, line, account.id, instrumentMap, strategyMap, seen);
-      if (!prepared.payload) {
-        rejected.push({
-          line,
-          error: [...prepared.preview.errors, prepared.duplicate ? "duplicate" : ""].filter(Boolean).join("; "),
-        });
-        continue;
-      }
-      try {
-        const trade = await createTrade(session!.uid, prepared.payload);
-        created.push(trade.displayId);
-        seen.push(prepared.existing);
-      } catch (cause) {
-        rejected.push({ line, error: cause instanceof Error ? cause.message : "Failed to import" });
-      }
-    }
-    return NextResponse.json({ created, rejected, imported: created.length });
-  }
-
-  if (typeof body.csv !== "string" || body.csv.length > MAX_CSV_CHARS) {
-    return jsonError(`CSV must be text and at most ${MAX_CSV_CHARS.toLocaleString()} characters`);
-  }
-  let parsedCsv: ReturnType<typeof parseCsv>;
   try {
-    parsedCsv = parseCsv(body.csv);
-  } catch (cause) {
-    return jsonError(cause instanceof Error ? cause.message : "Invalid CSV");
-  }
-  if (parsedCsv.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
-  const seen: ExistingTrade[] = [...saved];
-  const preview = parsedCsv.rows.map((raw, index) => {
-    const prepared = prepareRow(
-      canonicalRow(raw, true),
-      parsedCsv.lineMap[index],
-      account.id,
-      instrumentMap,
-      strategyMap,
-      seen,
-    );
-    if (!prepared.preview.errors.length && !prepared.duplicate) seen.push(prepared.existing);
-    return prepared.preview;
-  });
+    const input = parsedBody.data;
+    if (input.commit && input.batchId) {
+      const batch = await getImportBatch(session!.uid, input.batchId);
+      if (!batch) return jsonError("Import batch not found", 404);
+      if (batch.status !== "preview") return jsonError("This import batch was already committed or rolled back", 409);
+      const account = await resolveAccount(session!.uid, batch.accountId);
+      const parsed = parseCsv(batch.originalCsv);
+      if (parsed.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
+      const prepared = await prepareForAccount(session!.uid, account.id, parsed.rows, parsed.lineMap);
+      if (prepared.preview.length !== batch.totalRows) {
+        return jsonError("The import format changed after preview. Preview the original file again.", 409);
+      }
+      return await commitPrepared(session!.uid, batch.id, prepared);
+    }
 
-  return NextResponse.json({
-    headers: parsedCsv.headers,
-    preview,
-    valid: preview.filter((row) => !row.errors.length && !row.duplicate).length,
-    rejected: preview.filter((row) => row.errors.length || row.duplicate).length,
-  });
+    if (input.commit) {
+      // Backward-compatible clients can still commit the old preview shape, but the write is now atomic.
+      if (!input.rows) return jsonError("batchId is required for a new import commit");
+      const account = await resolveAccount(session!.uid, input.accountId);
+      const rows = input.rows.map((row) => row?.data && typeof row.data === "object" ? row.data : {});
+      const lineMap = input.rows.map((row, index) => Number.isSafeInteger(row?.line) && row.line > 0 ? row.line : index + 2);
+      const prepared = await prepareForAccount(session!.uid, account.id, rows, lineMap);
+      const batch = await createImportBatch(session!.uid, account.id, "legacy-import.json", "", prepared.preview.length, prepared.rejected);
+      return await commitPrepared(session!.uid, batch.id, prepared);
+    }
+
+    if (typeof input.csv !== "string") return jsonError("CSV text is required");
+    const account = await resolveAccount(session!.uid, input.accountId);
+    const parsed = parseCsv(input.csv);
+    if (parsed.rows.length > MAX_ROWS) return jsonError(`Import is limited to ${MAX_ROWS} rows`);
+    const prepared = await prepareForAccount(session!.uid, account.id, parsed.rows, parsed.lineMap);
+    const batch = await createImportBatch(
+      session!.uid,
+      account.id,
+      input.fileName || "import.csv",
+      input.csv,
+      prepared.preview.length,
+      prepared.rejected,
+    );
+    return NextResponse.json({
+      batchId: batch.id,
+      fileHash: batch.fileHash,
+      accountId: account.id,
+      headers: parsed.headers,
+      ...publicPreparation(prepared),
+    });
+  } catch (cause) {
+    return jsonError(cause instanceof Error ? cause.message : "Import failed; no valid rows were partially committed");
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const { session, error } = await requireUser();
+  if (error) return error;
+  const batchId = request.nextUrl.searchParams.get("id");
+  if (batchId) {
+    if (!isUuid(batchId)) return jsonError("Invalid batch ID");
+    const batch = await getImportBatch(session!.uid, batchId);
+    if (!batch) return jsonError("Import batch not found", 404);
+    const { originalCsv: _originalCsv, ...metadata } = batch;
+    return NextResponse.json({ batch: metadata });
+  }
+  const batches = await db.select({
+    id: importBatches.id,
+    accountId: importBatches.accountId,
+    fileName: importBatches.fileName,
+    fileHash: importBatches.fileHash,
+    status: importBatches.status,
+    totalRows: importBatches.totalRows,
+    importedRows: importBatches.importedRows,
+    rejectedRows: importBatches.rejectedRows,
+    createdAt: importBatches.createdAt,
+    committedAt: importBatches.committedAt,
+    rolledBackAt: importBatches.rolledBackAt,
+  }).from(importBatches).where(eq(importBatches.userId, session!.uid)).orderBy(desc(importBatches.createdAt)).limit(30);
+  return NextResponse.json({ batches });
+}
+
+export async function DELETE(request: NextRequest) {
+  const { session, error } = await requireUser();
+  if (error) return error;
+  const batchId = request.nextUrl.searchParams.get("id");
+  if (!batchId || !isUuid(batchId)) return jsonError("Invalid batch ID");
+  try {
+    const result = await rollbackImportBatch(session!.uid, batchId);
+    if (!result) return jsonError("Import batch not found", 404);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (cause) {
+    return jsonError(cause instanceof Error ? cause.message : "Could not roll back import");
+  }
 }
