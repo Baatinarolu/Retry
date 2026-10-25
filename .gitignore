@@ -1,0 +1,22 @@
+# Dependencies and framework output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+
+# Local runtime data and private uploads
+data/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# TypeScript / Next.js generated files
+*.tsbuildinfo
+next-env.d.ts

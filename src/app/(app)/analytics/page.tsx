@@ -1,0 +1,121 @@
+"use client";
+
+import { DistBars, EquityChart } from "@/components/Charts";
+import { Filters } from "@/components/Filters";
+import { Banner, Card, Spinner, Stat } from "@/components/ui";
+import { useWorkspace } from "@/components/useWorkspace";
+import { formatMoney, formatPct, pnlClass } from "@/lib/format";
+import { useEffect, useState } from "react";
+
+export default function AnalyticsPage() {
+  const ws = useWorkspace();
+  const { loading: workspaceLoading, loadAnalytics } = ws;
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (workspaceLoading) return;
+    const controller = new AbortController();
+    loadAnalytics(controller.signal)
+      .then((result) => {
+        setData(result);
+        setError("");
+      })
+      .catch((cause: unknown) => {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setError(cause instanceof Error ? cause.message : "Could not load analytics");
+        }
+      });
+    return () => controller.abort();
+  }, [workspaceLoading, loadAnalytics]);
+
+  if (workspaceLoading || !data) {
+    return ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : <Spinner label="Running analytics engine" />;
+  }
+  const a = data.analytics;
+  const s = a.stats;
+
+  return (
+    <div className="space-y-5">
+      {error ? <Banner tone="warn">{error}</Banner> : null}
+      <div>
+        <h1 className="text-2xl font-semibold">Analytics</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Expectancy in R = (win rate × average winning R) − (loss rate × average losing R). Profit factor is undefined when there are no losses.
+        </p>
+      </div>
+      <Card>
+        <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
+      </Card>
+      {s.sampleWarning ? <Banner tone="warn">n={s.totalTrades}. Small samples overfit stories.</Banner> : null}
+      <div className="grid gap-3 md:grid-cols-4">
+        <Stat label="Expectancy R" value={s.expectancyR ?? "n/a"} />
+        <Stat label="Avg win R" value={s.averageWinR ?? "—"} />
+        <Stat label="Avg loss R" value={s.averageLossR ?? "—"} />
+        <Stat label="Recovery factor" value={s.recoveryFactor ?? "n/a"} hint="Net / max DD" />
+      </div>
+      <Card>
+        <h2 className="mb-3 font-semibold">Equity</h2>
+        <EquityChart data={a.equity} currency={ws.currency} />
+      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <h2 className="mb-2 font-semibold">Weekday</h2>
+          <DistBars data={a.byWeekday.map((r: any) => ({ label: r.label.slice(0, 3), value: Number(r.stats.netPnl) }))} />
+        </Card>
+        <Card>
+          <h2 className="mb-2 font-semibold">Direction</h2>
+          <Table rows={a.byDirection} currency={ws.currency} />
+        </Card>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card><h2 className="mb-2 font-semibold">Instrument</h2><Table rows={a.byInstrument} currency={ws.currency} /></Card>
+        <Card><h2 className="mb-2 font-semibold">Session</h2><Table rows={a.bySession} currency={ws.currency} /></Card>
+        <Card><h2 className="mb-2 font-semibold">Timeframe</h2><Table rows={a.byTimeframe} currency={ws.currency} /></Card>
+        <Card><h2 className="mb-2 font-semibold">Plan adherence</h2><Table rows={a.byPlan} currency={ws.currency} /></Card>
+        <Card><h2 className="mb-2 font-semibold">Emotion before entry</h2><Table rows={a.byEmotion} currency={ws.currency} /></Card>
+        <Card><h2 className="mb-2 font-semibold">News tag</h2><Table rows={a.byNews} currency={ws.currency} /></Card>
+      </div>
+      <Card>
+        <h2 className="mb-3 font-semibold">Insights (correlations, not proof)</h2>
+        <ul className="space-y-3">
+          {a.insights.map((i: any) => (
+            <li key={i.title} className="card-quiet p-3">
+              <p className="font-medium">{i.title}</p>
+              <p className="text-sm text-[var(--muted)]">{i.body}</p>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+function Table({ rows, currency }: { rows: any[]; currency: string }) {
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th>n</th>
+            <th>Win%</th>
+            <th>Exp R</th>
+            <th>Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key}>
+              <td>{r.label}{r.sampleWarning ? " *" : ""}</td>
+              <td>{r.stats.totalTrades}</td>
+              <td>{formatPct(r.stats.winRate)}</td>
+              <td>{r.stats.expectancyR ?? "—"}</td>
+              <td className={pnlClass(r.stats.netPnl)}>{formatMoney(r.stats.netPnl, currency)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
