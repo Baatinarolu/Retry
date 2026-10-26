@@ -4,7 +4,6 @@ import {
   DIRECTIONS,
   EMOTIONS,
   MARKET_CATEGORIES,
-  SCREENSHOT_CATEGORIES,
   SESSIONS,
   TIMEFRAMES,
   TRADE_TYPES,
@@ -16,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Banner, Button, Field, Input, Select, Textarea } from "./ui";
+import { ScreenshotUploader } from "./ScreenshotUploader";
 
 type Account = { id: string; name: string; currency: string; currentBalance: string };
 type Strategy = { id: string; name: string };
@@ -429,23 +429,16 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
   }
 
   async function uploadShot(file: File, category: string, caption: string) {
-    if (!tradeId) {
-      setError("Save the trade first, then attach screenshots. Images are only stored after the server confirms.");
-      return;
-    }
-    try {
-      const data = new FormData();
-      data.set("file", file);
-      data.set("category", category);
-      data.set("caption", caption);
-      const response = await fetch(`/api/trades/${tradeId}/screenshots`, { method: "POST", body: data });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Upload failed");
-      setShots((current) => [...current, result.screenshot]);
-      setError("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Upload failed");
-    }
+    if (!tradeId) throw new Error("Save the trade first, then attach screenshots.");
+    const data = new FormData();
+    data.set("file", file);
+    data.set("category", category);
+    data.set("caption", caption);
+    const response = await fetch(`/api/trades/${tradeId}/screenshots`, { method: "POST", body: data });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Upload failed");
+    setShots((current) => [...current, result.screenshot]);
+    setError("");
   }
 
   const flags: { key: keyof typeof empty; label: string }[] = [
@@ -763,10 +756,8 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
 
       <section className="card space-y-4 p-5">
         <div className="card-heading"><h2>Chart screenshots</h2><span>05 / Visual evidence</span></div>
-        {!tradeId ? <p className="text-sm text-[var(--muted)]">Save the trade to upload private screenshots. They are served only to your account.</p> : null}
-        {tradeId ? (
-          <ShotUploader onUpload={uploadShot} />
-        ) : null}
+        {!tradeId ? <p className="text-sm text-[var(--muted)]">Save the trade, then use Add images on its detail page. Images are uploaded only after the server confirms the trade exists.</p> : null}
+        {tradeId ? <ScreenshotUploader onUpload={uploadShot} /> : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shots.map((s) => (
             <figure key={s.id} className="card-quiet overflow-hidden">
@@ -815,36 +806,5 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
         <Button type="button" variant="ghost" onClick={persistDraft}>Save local draft</Button>
       </div>
     </form>
-  );
-}
-
-function ShotUploader({ onUpload }: { onUpload: (file: File, category: string, caption: string) => Promise<void> }) {
-  const [category, setCategory] = useState("entry");
-  const [caption, setCaption] = useState("");
-  return (
-    <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-      <Field label="Category">
-        <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-          {SCREENSHOT_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Caption">
-        <Input value={caption} onChange={(e) => setCaption(e.target.value)} />
-      </Field>
-      <label className="btn btn-ghost cursor-pointer">
-        Upload image
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file, category, caption);
-          }}
-        />
-      </label>
-    </div>
   );
 }

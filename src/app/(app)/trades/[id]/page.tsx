@@ -5,6 +5,7 @@ import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
 import { PricePathPanel } from "@/components/PricePathPanel";
 import { RiskLevelsPanel } from "@/components/RiskLevelsPanel";
 import { ReverseTradePanel } from "@/components/ReverseTradePanel";
+import { ScreenshotUploader } from "@/components/ScreenshotUploader";
 import { TradeReviewPanel } from "@/components/TradeReviewPanel";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
@@ -45,6 +46,16 @@ export default function TradeDetailPage() {
   if (!trade) return <Spinner />;
   const currency = trade.accountCurrency || "USD";
 
+  async function uploadShot(file: File, category: string, caption: string) {
+    const data = new FormData();
+    data.set("file", file);
+    data.set("category", category);
+    data.set("caption", caption);
+    const result = await apiJson<{ screenshot: any }>(`/api/trades/${id}/screenshots`, { method: "POST", body: data });
+    setTrade((current: any) => ({ ...current, screenshots: [...(current.screenshots || []), result.screenshot] }));
+    setError("");
+  }
+
   async function remove() {
     if (!confirm("Delete this trade? This cannot be undone.")) return;
     try {
@@ -65,6 +76,7 @@ export default function TradeDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/journal" className="btn btn-ghost">Back to journal</Link>
+          <a href="#chart-screenshots" className="btn btn-ghost">Add images</a>
           <Button variant="ghost" onClick={() => setEditing((value) => !value)}>{editing ? "Close editor" : "Edit"}</Button>
           <Button variant="danger" onClick={remove}>Delete</Button>
         </div>
@@ -128,33 +140,41 @@ export default function TradeDetailPage() {
         </section>
       ) : null}
       {trade.notes ? <aside className="paper-docket p-6 sm:p-8"><p className="eyebrow mb-3">Trader&apos;s note</p><p className="max-w-4xl font-serif text-xl leading-8">{trade.notes}</p></aside> : null}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {(trade.screenshots || []).map((screenshot: any) => (
-          <button key={screenshot.id} onClick={() => setZoom(screenshot.id)} className="card-quiet overflow-hidden text-left">
-            <Image
-              src={`/api/screenshots/${screenshot.id}`}
-              alt={screenshot.caption || screenshot.category}
-              width={640}
-              height={320}
-              unoptimized
-              className="h-40 w-full object-cover"
-            />
-            <p className="px-3 py-2 text-xs text-[var(--muted)]">{screenshot.category} {screenshot.caption}</p>
-          </button>
-        ))}
-      </div>
-      {zoom ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6" onClick={() => setZoom(null)}>
-          <Image
-            src={`/api/screenshots/${zoom}`}
-            alt="Expanded chart screenshot"
-            width={1600}
-            height={1200}
-            unoptimized
-            className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
-          />
+      <section id="chart-screenshots" className="card space-y-4 scroll-mt-24 p-5">
+        <div className="card-heading">
+          <div><p className="eyebrow mb-2">Visual evidence</p><h2>Chart screenshots</h2></div>
+          <span>{(trade.screenshots || []).length} images</span>
         </div>
-      ) : null}
+        <ScreenshotUploader onUpload={uploadShot} />
+        {!(trade.screenshots || []).length ? <p className="text-sm text-[var(--muted)]">No chart images yet. Add before-entry, entry, management, or exit evidence above.</p> : null}
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {(trade.screenshots || []).map((screenshot: any) => (
+            <button key={screenshot.id} onClick={() => setZoom(screenshot.id)} className="card-quiet overflow-hidden text-left">
+              <Image
+                src={`/api/screenshots/${screenshot.id}`}
+                alt={screenshot.caption || screenshot.category}
+                width={640}
+                height={320}
+                unoptimized
+                className="h-40 w-full object-cover"
+              />
+              <p className="px-3 py-2 text-xs text-[var(--muted)]">{screenshot.category} {screenshot.caption}</p>
+            </button>
+          ))}
+        </div>
+        {zoom ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6" onClick={() => setZoom(null)}>
+            <Image
+              src={`/api/screenshots/${zoom}`}
+              alt="Expanded chart screenshot"
+              width={1600}
+              height={1200}
+              unoptimized
+              className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
+            />
+          </div>
+        ) : null}
+      </section>
       {trade.psychology ? (
         <section className="card p-5 text-sm">
           <h2 className="mb-2 font-semibold">Psychology</h2>

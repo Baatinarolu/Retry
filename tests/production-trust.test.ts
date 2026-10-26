@@ -44,6 +44,13 @@ test("every workspace-mutating API handler requires a writable non-demo user", (
   assert.match(api, /options\.write && user\.demoMode/);
 });
 
+test("saved trade details expose chart uploads without opening the editor", () => {
+  const source = readFileSync("src/app/(app)/trades/[id]/page.tsx", "utf8");
+  assert.match(source, /id="chart-screenshots"/);
+  assert.match(source, /<ScreenshotUploader onUpload=\{uploadShot\} \/>/);
+  assert.ok(source.indexOf("<ScreenshotUploader") < source.indexOf("<TradeForm"), "upload is not buried inside the editor");
+});
+
 test("rate-limit policy preserves exact boundaries and Retry-After values", () => {
   const now = new Date("2026-10-25T12:00:00.000Z");
   const resetAt = new Date(now.getTime() + 30_000);
