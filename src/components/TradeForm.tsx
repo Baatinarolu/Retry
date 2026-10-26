@@ -11,10 +11,10 @@ import {
 import { computeTradeMetrics } from "@/lib/calculations";
 import { calculateExecutionLedger } from "@/lib/execution-ledger";
 import { formatMoney, formatR } from "@/lib/format";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { Banner, Button, Field, Input, Select, Textarea } from "./ui";
+import { ScreenshotGallery, ScreenshotLightbox, type TradeScreenshot } from "./ScreenshotGallery";
 import { ScreenshotUploader } from "./ScreenshotUploader";
 
 type Account = { id: string; name: string; currency: string; currentBalance: string };
@@ -110,7 +110,17 @@ const empty = {
   reflection: "",
 };
 
-export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (trade: Record<string, unknown>) => void }) {
+export function TradeForm({
+  tradeId,
+  onSaved,
+  screenshots,
+  onScreenshotsChanged,
+}: {
+  tradeId?: string;
+  onSaved?: (trade: Record<string, unknown>) => void;
+  screenshots?: TradeScreenshot[];
+  onScreenshotsChanged?: Dispatch<SetStateAction<TradeScreenshot[]>>;
+}) {
   const router = useRouter();
   const draftKey = tradeId ? `${DRAFT_KEY}:${tradeId}` : DRAFT_KEY;
   const [form, setForm] = useState(empty);
@@ -126,8 +136,13 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [offlineDraft, setOfflineDraft] = useState(false);
-  const [shots, setShots] = useState<{ id: string; category: string; caption: string }[]>([]);
+  const [localShots, setLocalShots] = useState<TradeScreenshot[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
+  const shots = screenshots ?? localShots;
+  const updateShots: Dispatch<SetStateAction<TradeScreenshot[]>> = (update) => {
+    if (onScreenshotsChanged) onScreenshotsChanged(update);
+    else setLocalShots(update);
+  };
   const currency = accounts.find((a) => a.id === form.accountId)?.currency || "USD";
 
   const restoreDraft = useCallback(() => {
@@ -237,7 +252,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
               notes: e.notes,
             })),
           );
-          setShots(t.screenshots || []);
+          setLocalShots(t.screenshots || []);
           // A failed edit may have a newer local draft; restore it after the server version.
           restoreDraft();
         })
@@ -437,7 +452,7 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
     const response = await fetch(`/api/trades/${tradeId}/screenshots`, { method: "POST", body: data });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Upload failed");
-    setShots((current) => [...current, result.screenshot]);
+    updateShots((current) => [...current, result.screenshot]);
     setError("");
   }
 
@@ -758,47 +773,13 @@ export function TradeForm({ tradeId, onSaved }: { tradeId?: string; onSaved?: (t
         <div className="card-heading"><h2>Chart screenshots</h2><span>05 / Visual evidence</span></div>
         {!tradeId ? <p className="text-sm text-[var(--muted)]">Save the trade, then use Add images on its detail page. Images are uploaded only after the server confirms the trade exists.</p> : null}
         {tradeId ? <ScreenshotUploader onUpload={uploadShot} /> : null}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {shots.map((s) => (
-            <figure key={s.id} className="card-quiet overflow-hidden">
-              <button type="button" onClick={() => setZoom(s.id)} className="block w-full">
-                <Image
-                  src={`/api/screenshots/${s.id}`}
-                  alt={s.caption || s.category}
-                  width={640}
-                  height={320}
-                  unoptimized
-                  className="h-40 w-full object-cover"
-                />
-              </button>
-              <figcaption className="flex items-center justify-between px-3 py-2 text-xs text-[var(--muted)]">
-                <span>{s.category}{s.caption ? ` · ${s.caption}` : ""}</span>
-                <button
-                  type="button"
-                  className="text-[var(--red)]"
-                  onClick={async () => {
-                    await fetch(`/api/screenshots/${s.id}`, { method: "DELETE" });
-                    setShots((xs) => xs.filter((x) => x.id !== s.id));
-                  }}
-                >
-                  Delete
-                </button>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-        {zoom ? (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6" onClick={() => setZoom(null)}>
-            <Image
-              src={`/api/screenshots/${zoom}`}
-              alt="Expanded chart screenshot"
-              width={1600}
-              height={1200}
-              unoptimized
-              className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
-            />
-          </div>
-        ) : null}
+        <ScreenshotGallery
+          screenshots={shots}
+          onUpdated={(updated) => updateShots((current) => current.map((shot) => shot.id === updated.id ? updated : shot))}
+          onDeleted={(deletedId) => updateShots((current) => current.filter((shot) => shot.id !== deletedId))}
+          onZoom={setZoom}
+        />
+        <ScreenshotLightbox screenshotId={zoom} onClose={() => setZoom(null)} />
       </section>
 
       <div className="flex flex-wrap gap-3 border-t border-[var(--line-strong)] pt-5">

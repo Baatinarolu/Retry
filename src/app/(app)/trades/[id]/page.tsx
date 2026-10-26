@@ -5,15 +5,16 @@ import { ExecutionReviewPanel } from "@/components/ExecutionReviewPanel";
 import { PricePathPanel } from "@/components/PricePathPanel";
 import { RiskLevelsPanel } from "@/components/RiskLevelsPanel";
 import { ReverseTradePanel } from "@/components/ReverseTradePanel";
+import { ScreenshotGallery, ScreenshotLightbox, type TradeScreenshot } from "@/components/ScreenshotGallery";
 import { ScreenshotUploader } from "@/components/ScreenshotUploader";
 import { TradeReviewPanel } from "@/components/TradeReviewPanel";
+import { TradeTimeline } from "@/components/TradeTimeline";
 import { Banner, Button, Spinner, Stat } from "@/components/ui";
 import { apiJson } from "@/lib/client-api";
 import { formatMoney, formatR, formatWhen } from "@/lib/format";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SetStateAction } from "react";
 
 export default function TradeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +36,14 @@ export default function TradeDetailPage() {
     return () => controller.abort();
   }, [id]);
 
+  function changeScreenshots(update: SetStateAction<TradeScreenshot[]>) {
+    setTrade((current: any) => {
+      if (!current) return current;
+      const screenshots = current.screenshots || [];
+      return { ...current, screenshots: typeof update === "function" ? update(screenshots) : update };
+    });
+  }
+
   if (error) {
     return (
       <div className="space-y-4">
@@ -51,8 +60,8 @@ export default function TradeDetailPage() {
     data.set("file", file);
     data.set("category", category);
     data.set("caption", caption);
-    const result = await apiJson<{ screenshot: any }>(`/api/trades/${id}/screenshots`, { method: "POST", body: data });
-    setTrade((current: any) => ({ ...current, screenshots: [...(current.screenshots || []), result.screenshot] }));
+    const result = await apiJson<{ screenshot: TradeScreenshot }>(`/api/trades/${id}/screenshots`, { method: "POST", body: data });
+    changeScreenshots((current) => [...current, result.screenshot]);
     setError("");
   }
 
@@ -93,6 +102,7 @@ export default function TradeDetailPage() {
       {trade.reversalTarget ? (
         <Banner>Reversed to <Link className="underline" href={`/trades/${trade.reversalTarget.id}`}>{trade.reversalTarget.displayId}</Link> · {trade.direction} → {trade.reversalTarget.direction}</Banner>
       ) : null}
+      <TradeTimeline trade={trade} currency={currency} onOpenScreenshot={setZoom} />
       {trade.executionReview ? <ExecutionReviewPanel review={trade.executionReview} currency={currency} /> : null}
       {trade.status === "open" && trade.executions?.length ? (
         <ReverseTradePanel tradeId={id} direction={trade.direction} remainingQuantity={trade.positionSize} />
@@ -147,33 +157,12 @@ export default function TradeDetailPage() {
         </div>
         <ScreenshotUploader onUpload={uploadShot} />
         {!(trade.screenshots || []).length ? <p className="text-sm text-[var(--muted)]">No chart images yet. Add before-entry, entry, management, or exit evidence above.</p> : null}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {(trade.screenshots || []).map((screenshot: any) => (
-            <button key={screenshot.id} onClick={() => setZoom(screenshot.id)} className="card-quiet overflow-hidden text-left">
-              <Image
-                src={`/api/screenshots/${screenshot.id}`}
-                alt={screenshot.caption || screenshot.category}
-                width={640}
-                height={320}
-                unoptimized
-                className="h-40 w-full object-cover"
-              />
-              <p className="px-3 py-2 text-xs text-[var(--muted)]">{screenshot.category} {screenshot.caption}</p>
-            </button>
-          ))}
-        </div>
-        {zoom ? (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6" onClick={() => setZoom(null)}>
-            <Image
-              src={`/api/screenshots/${zoom}`}
-              alt="Expanded chart screenshot"
-              width={1600}
-              height={1200}
-              unoptimized
-              className="h-auto max-h-full w-auto max-w-full border border-[var(--line-strong)]"
-            />
-          </div>
-        ) : null}
+        <ScreenshotGallery
+          screenshots={trade.screenshots || []}
+          onUpdated={(updated) => changeScreenshots((current) => current.map((shot) => shot.id === updated.id ? updated : shot))}
+          onDeleted={(deletedId) => changeScreenshots((current) => current.filter((shot) => shot.id !== deletedId))}
+          onZoom={setZoom}
+        />
       </section>
       {trade.psychology ? (
         <section className="card p-5 text-sm">
@@ -185,6 +174,8 @@ export default function TradeDetailPage() {
       {editing ? (
         <TradeForm
           tradeId={id}
+          screenshots={trade.screenshots || []}
+          onScreenshotsChanged={changeScreenshots}
           onSaved={(updated) => {
             setTrade((current: any) => ({ ...current, ...updated }));
             setEditing(false);
@@ -194,6 +185,7 @@ export default function TradeDetailPage() {
           }}
         />
       ) : null}
+      <ScreenshotLightbox screenshotId={zoom} onClose={() => setZoom(null)} />
     </div>
   );
 }

@@ -48,7 +48,23 @@ test("saved trade details expose chart uploads without opening the editor", () =
   const source = readFileSync("src/app/(app)/trades/[id]/page.tsx", "utf8");
   assert.match(source, /id="chart-screenshots"/);
   assert.match(source, /<ScreenshotUploader onUpload=\{uploadShot\} \/>/);
+  assert.match(source, /<ScreenshotGallery/);
+  assert.match(source, /<TradeTimeline/);
   assert.ok(source.indexOf("<ScreenshotUploader") < source.indexOf("<TradeForm"), "upload is not buried inside the editor");
+});
+
+test("trade evidence upgrades preserve direct metadata controls and multi-input uploads", () => {
+  const uploader = readFileSync("src/components/ScreenshotUploader.tsx", "utf8");
+  assert.match(uploader, /multiple/);
+  assert.match(uploader, /onDrop=/);
+  assert.match(uploader, /onPaste=/);
+  const gallery = readFileSync("src/components/ScreenshotGallery.tsx", "utf8");
+  assert.match(gallery, /method: "PATCH"/);
+  assert.match(gallery, /method: "DELETE"/);
+  assert.match(gallery, /Download original/);
+  const timeline = readFileSync("src/lib/trade-timeline.ts", "utf8");
+  assert.match(timeline, /shown at upload time/);
+  assert.match(timeline, /never feeds execution, risk, or P&L calculations/);
 });
 
 test("rate-limit policy preserves exact boundaries and Retry-After values", () => {
