@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cashFlowSchema, journalSchema, riskSchema, savedViewSchema, settingsSchema, signupSchema, tradeReviewSchema, tradeSchema } from "../src/lib/validations";
+import { bulkTradeReviewSchema, cashFlowSchema, journalSchema, riskSchema, savedViewSchema, settingsSchema, signupSchema, tradeReviewSchema, tradeSchema } from "../src/lib/validations";
 
 const validTrade = {
   accountId: "123e4567-e89b-42d3-a456-426614174000",
@@ -73,6 +73,24 @@ test("review status requires an actionable follow-up and bounds next-action text
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "needs_follow_up", nextAction: "" }).success, false);
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "needs_follow_up", nextAction: "Reduce size" }).success, true);
   assert.equal(tradeReviewSchema.safeParse({ reviewStatus: "reviewed", nextAction: "x".repeat(2001) }).success, false);
+});
+
+test("bulk review validates bounded unique IDs and explicit shared follow-ups", () => {
+  const ids = [validTrade.accountId, "123e4567-e89b-42d3-a456-426614174001"];
+  const reviewed = bulkTradeReviewSchema.safeParse({ ids, reviewStatus: "reviewed" });
+  assert.equal(reviewed.success, true);
+  if (reviewed.success) assert.equal(reviewed.data.nextAction, undefined, "omission preserves each trade's existing next action");
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids, reviewStatus: "needs_follow_up" }).success, false);
+  const followUp = bulkTradeReviewSchema.safeParse({ ids, reviewStatus: "needs_follow_up", nextAction: "  Wait for confirmation  " });
+  assert.equal(followUp.success, true);
+  if (followUp.success) assert.equal(followUp.data.nextAction, "Wait for confirmation");
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids: [ids[0], ids[0]], reviewStatus: "reviewed" }).success, false);
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids: [], reviewStatus: "reviewed" }).success, false);
+  const tooMany = Array.from({ length: 101 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids: tooMany.slice(0, 100), reviewStatus: "reviewed" }).success, true);
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids: tooMany, reviewStatus: "reviewed" }).success, false);
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids: ["not-a-uuid"], reviewStatus: "reviewed" }).success, false);
+  assert.equal(bulkTradeReviewSchema.safeParse({ ids, reviewStatus: "reviewed", unexpected: true }).success, false);
 });
 
 test("saved views accept only bounded, known filter fields", () => {

@@ -25,7 +25,7 @@ const guardedRoutes: Record<string, string[]> = {
   "src/app/api/trades/[id]/risk-levels/route.ts": ["POST", "DELETE"],
   "src/app/api/trades/[id]/reverse/route.ts": ["POST"],
   "src/app/api/trades/[id]/screenshots/route.ts": ["POST"],
-  "src/app/api/trades/route.ts": ["POST"],
+  "src/app/api/trades/route.ts": ["POST", "PATCH"],
   "src/app/api/views/route.ts": ["POST", "PATCH", "DELETE"],
 };
 
@@ -65,6 +65,18 @@ test("trade evidence upgrades preserve direct metadata controls and multi-input 
   const timeline = readFileSync("src/lib/trade-timeline.ts", "utf8");
   assert.match(timeline, /shown at upload time/);
   assert.match(timeline, /never feeds execution, risk, or P&L calculations/);
+});
+
+test("journal workflow keeps bulk review owned, atomic, and non-destructive to next actions", () => {
+  const route = readFileSync("src/app/api/trades/route.ts", "utf8");
+  assert.match(route, /db.transaction/);
+  assert.match(route, /owned.length !== parsed.data.ids.length/);
+  assert.match(route, /parsed.data.nextAction !== undefined/);
+  assert.match(route, /ilike\(tags.name/);
+  const page = readFileSync("src/app/(app)/journal/page.tsx", "utf8");
+  assert.match(page, /<JournalTableSettings/);
+  assert.match(page, /<ActiveJournalFilters/);
+  assert.match(page, /<BulkReviewBar/);
 });
 
 test("rate-limit policy preserves exact boundaries and Retry-After values", () => {

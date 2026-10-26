@@ -444,6 +444,14 @@ table.data tr:hover td {
   background: color-mix(in oklab, var(--bg-card-2) 60%, transparent);
 }
 
+table.data.journal-compact th {
+  padding: 0.45rem 0.6rem;
+}
+
+table.data.journal-compact td {
+  padding: 0.42rem 0.6rem;
+}
+
 .heatmap-pos {
   background: color-mix(in oklab, var(--green) 24%, var(--bg-card));
 }

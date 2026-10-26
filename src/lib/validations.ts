@@ -296,6 +296,22 @@ export const tradeReviewSchema = z
     }
   });
 
+export const bulkTradeReviewSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1, "Select at least one trade").max(100, "Update at most 100 trades at once"),
+    reviewStatus: z.enum(["unreviewed", "reviewed", "needs_follow_up"]),
+    nextAction: z.string().trim().max(2000).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (new Set(value.ids).size !== value.ids.length) {
+      ctx.addIssue({ code: "custom", path: ["ids"], message: "Select each trade only once" });
+    }
+    if (value.reviewStatus === "needs_follow_up" && !value.nextAction) {
+      ctx.addIssue({ code: "custom", path: ["nextAction"], message: "Add a next action for follow-up reviews" });
+    }
+  });
+
 export const pricePathPointSchema = z.object({
   observedAt: dateTimeString,
   price: requiredPositive,
