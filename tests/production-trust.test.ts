@@ -107,6 +107,10 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   assert.match(form, /Use broker P&amp;L/);
   assert.match(form, /Final net P&L from broker/);
   assert.match(form, /specificationMatchesTemplate/);
+  assert.match(form, /methodComparison/);
+  assert.match(form, /Two calculation methods give different gross P&amp;L/);
+  assert.match(form, /Use pip calculation/);
+  assert.match(form, /tickSize: "0", tickValue: "0"/);
   assert.match(form, /tradeId \|\| hasDraft \|\| !specificationUntouched/);
   assert.match(form, /Enter the lot size or contract quantity exactly as shown by your broker/);
   assert.match(form, /positionSize: ""/);

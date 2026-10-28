@@ -8,7 +8,7 @@ import {
   TIMEFRAMES,
   TRADE_TYPES,
 } from "@/lib/constants";
-import { computeTradeMetrics } from "@/lib/calculations";
+import { calculateGrossPnl, computeTradeMetrics } from "@/lib/calculations";
 import { apiJson } from "@/lib/client-api";
 import { calculateExecutionLedger } from "@/lib/execution-ledger";
 import { formatMoney, formatR } from "@/lib/format";
@@ -160,9 +160,12 @@ export function TradeForm({
     : false;
   const quoteCurrency = selectedInstrument?.quoteCurrency?.toUpperCase();
   const manualPnlAllowed = form.status === "closed" || executions.length > 0;
-  const calculationBasis = Number(form.tickSize) > 0 && Number(form.tickValue) > 0
+  const hasTickSpecification = Number(form.tickSize) > 0 && Number(form.tickValue) > 0;
+  const hasPipSpecification = Number(form.pipSize) > 0 && Number(form.pipValue) > 0;
+  const pipMethodSelected = !hasTickSpecification && hasPipSpecification && Number(form.tickSize) === 0 && Number(form.tickValue) === 0;
+  const calculationBasis = hasTickSpecification
     ? `Tick method: (directional price move ÷ ${form.tickSize}) × ${form.tickValue} ${currency} × quantity.`
-    : Number(form.pipSize) > 0 && Number(form.pipValue) > 0
+    : hasPipSpecification
       ? `Pip method: (directional price move ÷ ${form.pipSize}) × ${form.pipValue} ${currency} × quantity.`
       : Number(form.contractSize) > 0
         ? `Contract method: directional price move × ${form.contractSize} × quantity; the result is treated as ${currency}.`
@@ -360,6 +363,11 @@ export function TradeForm({
     }
   }
 
+  function choosePipMethod() {
+    setError("");
+    setForm((current) => ({ ...current, tickSize: "0", tickValue: "0" }));
+  }
+
   const summaryMetrics = useMemo(
     () =>
       computeTradeMetrics({
@@ -412,6 +420,24 @@ export function TradeForm({
     }
   }, [executions, form]);
   const metrics = executionPreview.ledger?.metrics ?? summaryMetrics;
+  const methodComparison = useMemo(() => {
+    if (executionPreview.ledger || executions.length || form.status === "open" || !form.exitPrice || !hasTickSpecification || !hasPipSpecification) return null;
+    const input = {
+      direction: form.direction as "long" | "short",
+      entryPrice: form.entryPrice || "0",
+      exitPrice: form.exitPrice,
+      positionSize: form.positionSize,
+      lotSize: form.lotSize,
+      contractSize: form.contractSize,
+      tickSize: form.tickSize,
+      tickValue: form.tickValue,
+      pipSize: form.pipSize,
+      pipValue: form.pipValue,
+    };
+    const tickGross = calculateGrossPnl(input).toFixed(4);
+    const pipGross = calculateGrossPnl({ ...input, tickSize: "0", tickValue: "0" }).toFixed(4);
+    return tickGross === pipGross ? null : { tickGross, pipGross };
+  }, [executionPreview.ledger, executions.length, form, hasTickSpecification, hasPipSpecification]);
   const calculationTrace = useMemo(() => {
     if (executionPreview.ledger || form.status === "open" || !form.exitPrice) return "";
     const entry = Number(form.entryPrice);
@@ -607,6 +633,8 @@ export function TradeForm({
           {!form.pnlOverridden && instrumentsLoaded ? (
             specificationMatchesTemplate ? (
               <Banner tone="good">Saved {form.instrument} settings are loaded. Enter the trade prices and size; no contract, tick, or pip values are needed from you.</Banner>
+            ) : selectedInstrument && pipMethodSelected ? (
+              <Banner tone="good">Pip calculation is active for this trade. Unused tick settings are zero, so they cannot override your pip value.</Banner>
             ) : selectedInstrument ? (
               <Banner tone="warn">
                 This trade&apos;s calculation settings differ from the saved {form.instrument} template. <button type="button" className="font-medium underline" onClick={() => void applyInstrumentSpecification()}>Load saved settings</button> or review the advanced fields before saving.
@@ -614,6 +642,13 @@ export function TradeForm({
             ) : (
               <Banner tone="warn">No saved template was found for {form.instrument}. Use broker P&amp;L for the simplest entry, or review the advanced calculation settings before saving.</Banner>
             )
+          ) : null}
+          {!form.pnlOverridden && methodComparison ? (
+            <Banner tone="warn">
+              <span className="block font-medium">Two calculation methods give different gross P&amp;L.</span>
+              <span className="mt-1 block">Ticks (gross): {formatMoney(methodComparison.tickGross, currency)} · Pips (gross): {formatMoney(methodComparison.pipGross, currency)}</span>
+              <span className="mt-1 block">The form currently uses ticks first. If the pip result matches your broker, <button type="button" className="font-medium underline" onClick={choosePipMethod}>Use pip calculation</button>. Review, then save the trade.</span>
+            </Banner>
           ) : null}
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Account">

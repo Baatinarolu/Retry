@@ -61,8 +61,8 @@ test("AUDCHF short statement example stays a win with an NGN-denominated pip val
   assert.equal(quoteGross.toFixed(4), "0.3900");
   assert.equal(quoteGross.mul(chfNgn).toFixed(4), "646.0700");
 
-  const result = computeTradeMetrics({
-    direction: "short",
+  const input = {
+    direction: "short" as const,
     entryPrice: "0.58423",
     exitPrice: "0.58384",
     stopLoss: "0.58467",
@@ -80,8 +80,12 @@ test("AUDCHF short statement example stays a win with an NGN-denominated pip val
     slippage: "0",
     entryAt: new Date("2026-10-28T09:04:06Z"),
     exitAt: new Date("2026-10-28T09:42:43Z"),
-  });
+  };
+  const result = computeTradeMetrics(input);
+  const conflictingTickResult = computeTradeMetrics({ ...input, tickSize: "0.00001", tickValue: "1" });
   assert.equal(result.grossPnl, "646.0700");
+  // Starting capital is irrelevant; a non-zero tick method takes priority over pips.
+  assert.equal(conflictingTickResult.grossPnl, "0.3900");
   assert.equal(result.netPnl, "646.0700");
   assert.equal(result.initialRisk, "728.8995");
   assert.equal(result.plannedRr, "1.4545");
