@@ -124,6 +124,52 @@ test("drawdown percent uses the peak at the historical drawdown, not a later pea
   assert.equal(stats.maxDrawdownPercent, 50);
 });
 
+test("currency and percentage maximum drawdowns are tracked independently", () => {
+  const stats = computePerformanceStats(
+    [
+      row({ netPnl: "-50", result: "loss", exitAt: new Date("2026-01-01T01:00:00Z") }),
+      row({ netPnl: "150", result: "win", exitAt: new Date("2026-01-02T01:00:00Z") }),
+      row({ netPnl: "-70", result: "loss", exitAt: new Date("2026-01-03T01:00:00Z") }),
+    ],
+    "100",
+  );
+  assert.equal(stats.maxDrawdown, "70.0000");
+  assert.equal(stats.maxDrawdownPercent, 50);
+});
+
+test("expectancy R uses one R-known population and reports its coverage", () => {
+  const stats = computePerformanceStats([
+    row({ netPnl: "100", result: "win", rMultiple: "2" }),
+    row({ netPnl: "50", result: "win", rMultiple: null }),
+    row({ netPnl: "-25", result: "loss", rMultiple: "-1" }),
+    row({ netPnl: "0", result: "be", rMultiple: null }),
+  ]);
+  assert.equal(stats.rSampleSize, 2);
+  assert.equal(stats.rMissing, 2);
+  assert.equal(stats.averageRr, 0.5);
+  assert.equal(stats.expectancyR, 0.5);
+
+  const winsOnly = computePerformanceStats([
+    row({ netPnl: "100", result: "win", rMultiple: "2" }),
+    row({ netPnl: "200", result: "win", rMultiple: "4" }),
+  ]);
+  assert.equal(winsOnly.expectancyR, 3);
+  assert.equal(winsOnly.rMissing, 0);
+});
+
+test("profit factor includes non-zero money classified as break-even", () => {
+  const stats = computePerformanceStats([
+    row({ netPnl: "100", result: "win" }),
+    row({ netPnl: "-50", result: "loss" }),
+    row({ netPnl: "0.005", result: "be" }),
+  ]);
+  assert.equal(stats.breakEvenTrades, 1);
+  assert.equal(stats.grossProfit, "100.0050");
+  assert.equal(stats.grossLoss, "-50.0000");
+  assert.equal(stats.profitFactor, 2.0001);
+  assert.equal(stats.averageWin, "100.0000");
+});
+
 test("equitySeries does not mutate the caller's trade order", () => {
   const trades = [
     row({ netPnl: "20", exitAt: new Date("2026-01-03T00:00:00Z") }),

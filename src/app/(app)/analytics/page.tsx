@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
         <div>
           <p className="eyebrow mb-3">Evidence / Performance analysis</p>
           <h1>Analytics</h1>
-          <p className="page-description">Expectancy in R = (win rate × average winning R) − (loss rate × average losing R). Profit factor is undefined when there are no losses.</p>
+          <p className="page-description">Expectancy R is the mean across trades with a valid R basis; coverage is shown below. Profit factor uses actual positive and negative net P&amp;L and is undefined when there is no negative P&amp;L.</p>
         </div>
       </div>
       <section className="filter-panel" aria-label="Analytics filters">
@@ -64,7 +64,7 @@ export default function AnalyticsPage() {
       </section>
       {s.sampleWarning ? <Banner tone="warn">n={s.totalTrades}. Small samples overfit stories.</Banner> : null}
       <div className="stats-grid grid-cols-2 md:grid-cols-4">
-        <Stat label="Expectancy R" value={s.expectancyR ?? "n/a"} />
+        <Stat label="Expectancy R" value={s.expectancyR ?? "n/a"} hint={`${s.rSampleSize} of ${s.totalTrades} trades have R · ${s.rMissing} missing`} />
         <Stat label="Avg win R" value={s.averageWinR ?? "—"} />
         <Stat label="Avg loss R" value={s.averageLossR ?? "—"} />
         <Stat label="Recovery factor" value={s.recoveryFactor ?? "n/a"} hint="Net / max DD" />
@@ -96,7 +96,8 @@ export default function AnalyticsPage() {
         <p className="mt-4 text-xs leading-5 text-[var(--muted)]">Removing one record is a sensitivity check, not proof that the record caused the outcome. Shares use gross profit/loss; net P&amp;L and expectancy are recalculated from the remaining sample.</p>
       </Card>
       <Card>
-        <h2 className="mb-3 font-semibold">Equity</h2>
+        <h2 className="mb-1 font-semibold">Closed-trade performance curve</h2>
+        <p className="mb-3 text-xs leading-5 text-[var(--muted)]">Cumulative closed-trade P&amp;L from the selected starting-balance basis; not a cash-flow-aware account valuation.</p>
         <EquityChart data={a.equity} currency={ws.currency} />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">

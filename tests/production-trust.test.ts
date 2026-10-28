@@ -118,6 +118,22 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   assert.doesNotMatch(form, /positionSize: "0\.5"/);
 });
 
+test("performance definitions disclose R coverage and broker cost conventions", () => {
+  const analytics = readFileSync("src/app/(app)/analytics/page.tsx", "utf8");
+  assert.match(analytics, /mean across trades with a valid R basis/);
+  assert.match(analytics, /rSampleSize/);
+  assert.match(analytics, /Closed-trade performance curve/);
+  const dashboard = readFileSync("src/app/(app)/dashboard/page.tsx", "utf8");
+  assert.match(dashboard, /maximum percentage decline/);
+  assert.match(dashboard, /not a cash-flow-aware account valuation/);
+  const form = readFileSync("src/components/TradeForm.tsx", "utf8");
+  assert.match(form, /Positive is a charge deducted from P&L; negative is a credit added/);
+  assert.match(form, /execution fees and this commission are both deducted/);
+  const reports = readFileSync("src/app/(app)/reports/page.tsx", "utf8");
+  assert.match(reports, /Some brokers export a charge as negative/);
+  assert.match(reports, /do not map the same charge twice/);
+});
+
 test("basic workspace options stay independent of risk profiles and FX-converted statistics", () => {
   const bootstrap = readFileSync("src/app/api/bootstrap/route.ts", "utf8");
   assert.doesNotMatch(bootstrap, /riskSettings/);

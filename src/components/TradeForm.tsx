@@ -783,10 +783,10 @@ export function TradeForm({
           </div>
           <details className="editorial-details">
             <summary>Fees &amp; adjustments (optional)</summary>
-            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">Costs affect automatic net P&amp;L. They do not change a broker-entered net result.</p>
+            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">Costs affect automatic net P&amp;L, not a broker-entered net result. With itemized fills, execution fees and this commission are both deducted—do not duplicate a charge. Actual fill prices already include execution slippage; use slippage cost only for a separate estimate.</p>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <Field label={`Commission (${currency})`}><Input inputMode="decimal" value={form.commission} onChange={(e) => set("commission", e.target.value)} /></Field>
-              <Field label={`Swap / funding (${currency})`}><Input inputMode="decimal" value={form.swap} onChange={(e) => set("swap", e.target.value)} /></Field>
+              <Field label={`Swap cost / credit (${currency})`} hint="Positive is a charge deducted from P&L; negative is a credit added. Check the broker’s sign convention."><Input inputMode="decimal" value={form.swap} onChange={(e) => set("swap", e.target.value)} /></Field>
               <Field label={`Slippage cost (${currency})`}><Input inputMode="decimal" value={form.slippage} onChange={(e) => set("slippage", e.target.value)} /></Field>
             </div>
           </details>

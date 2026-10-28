@@ -217,6 +217,8 @@ export type PerformanceStats = {
   averageWinR: number | null;
   averageLossR: number | null;
   expectancyR: number | null;
+  rSampleSize: number;
+  rMissing: number;
   expectancyCurrency: string | null;
   maxDrawdown: string;
   maxDrawdownPercent: number | null;
@@ -244,16 +246,20 @@ export function computePerformanceStats(
   const bes = closed.filter((t) => t.result === "be");
 
   const net = closed.reduce((acc, t) => acc.plus(d(t.netPnl)), new Decimal(0));
-  const grossProfit = wins.reduce((acc, t) => acc.plus(Decimal.max(d(t.netPnl), 0)), new Decimal(0));
-  const grossLossAbs = losses.reduce((acc, t) => acc.plus(d(t.netPnl).abs()), new Decimal(0));
+  const winTotal = wins.reduce((acc, t) => acc.plus(d(t.netPnl)), new Decimal(0));
+  const lossTotalAbs = losses.reduce((acc, t) => acc.plus(d(t.netPnl).abs()), new Decimal(0));
+  // Profit factor uses actual money signs, including small non-zero trades that
+  // the display classifier calls break-even. Win/loss averages keep their labels.
+  const grossProfit = closed.reduce((acc, t) => acc.plus(Decimal.max(d(t.netPnl), 0)), new Decimal(0));
+  const grossLossAbs = closed.reduce((acc, t) => acc.plus(Decimal.max(d(t.netPnl).neg(), 0)), new Decimal(0));
 
   const profitFactor = grossLossAbs.eq(0) ? null : Number(grossProfit.div(grossLossAbs).toFixed(4));
   const winRate = n === 0 ? null : wins.length / n;
   const lossRate = n === 0 ? null : losses.length / n;
   const beRate = n === 0 ? null : bes.length / n;
 
-  const averageWin = wins.length ? grossProfit.div(wins.length).toFixed(4) : null;
-  const averageLoss = losses.length ? grossLossAbs.neg().div(losses.length).toFixed(4) : null;
+  const averageWin = wins.length ? winTotal.div(wins.length).toFixed(4) : null;
+  const averageLoss = losses.length ? lossTotalAbs.neg().div(losses.length).toFixed(4) : null;
 
   const rValues = closed
     .map((t) => (t.rMultiple === null || t.rMultiple === undefined || t.rMultiple === "" ? null : d(t.rMultiple)))
@@ -276,10 +282,11 @@ export function computePerformanceStats(
     ? Number(lossR.reduce((a, b) => a.plus(b), new Decimal(0)).div(lossR.length).toFixed(4))
     : null;
 
-  const expectancyR =
-    winRate !== null && lossRate !== null && averageWinR !== null && averageLossR !== null
-      ? Number(new Decimal(winRate).mul(averageWinR).minus(new Decimal(lossRate).mul(averageLossR)).toFixed(4))
-      : null;
+  // Mean R over the same R-known population. Mixing all-trade win/loss rates
+  // with R-only averages gives a different, misleading result when R is missing.
+  const expectancyR = averageRr;
+  const rSampleSize = rValues.length;
+  const rMissing = n - rSampleSize;
 
   const expectancyCurrency = n === 0 ? null : net.div(n).toFixed(4);
 
@@ -289,17 +296,21 @@ export function computePerformanceStats(
   let equity = d(startingBalance);
   let peak = equity;
   let maxDd = new Decimal(0);
-  let peakAtMaxDd = equity;
+  let maxDdPercent = new Decimal(0);
+  let hasDrawdownPercentageBasis = peak.gt(0);
   for (const t of sorted) {
     equity = equity.plus(d(t.netPnl));
     if (equity.gt(peak)) peak = equity;
     const dd = peak.minus(equity);
-    if (dd.gt(maxDd)) {
-      maxDd = dd;
-      peakAtMaxDd = peak;
+    if (dd.gt(maxDd)) maxDd = dd;
+    if (peak.gt(0)) {
+      hasDrawdownPercentageBasis = true;
+      const ddPercent = dd.div(peak).mul(100);
+      if (ddPercent.gt(maxDdPercent)) maxDdPercent = ddPercent;
     }
   }
-  const maxDrawdownPercent = peakAtMaxDd.gt(0) ? Number(maxDd.div(peakAtMaxDd).mul(100).toFixed(2)) : null;
+  // Currency and percentage maxima can occur at different historical points.
+  const maxDrawdownPercent = hasDrawdownPercentageBasis ? Number(maxDdPercent.toFixed(2)) : null;
   const recoveryFactor = maxDd.eq(0) ? null : Number(net.div(maxDd).toFixed(4));
 
   const holdings = closed.map((t) => t.holdingMinutes).filter((v): v is number => typeof v === "number");
@@ -359,6 +370,8 @@ export function computePerformanceStats(
     averageWinR,
     averageLossR,
     expectancyR,
+    rSampleSize,
+    rMissing,
     expectancyCurrency,
     maxDrawdown: maxDd.toFixed(4),
     maxDrawdownPercent,

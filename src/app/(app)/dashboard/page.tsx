@@ -101,9 +101,9 @@ export default function DashboardPage() {
         <div className="stats-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
           <Stat label="Net P&L" value={formatMoney(s.netPnl, ws.currency)} tone={Number(s.netPnl) >= 0 ? "up" : "down"} />
           <Stat label="Win rate" value={formatPct(s.winRate)} hint={`${s.winningTrades}W / ${s.losingTrades}L / ${s.breakEvenTrades} BE`} />
-          <Stat label="Expectancy" value={s.expectancyR === null ? "—" : `${s.expectancyR.toFixed(2)}R`} hint={formatMoney(s.expectancyCurrency, ws.currency) + " / trade"} />
-          <Stat label="Profit factor" value={s.profitFactor === null ? "n/a" : s.profitFactor.toFixed(2)} hint="Undefined without losses" />
-          <Stat label="Max drawdown" value={formatMoney(s.maxDrawdown, ws.currency)} tone="down" />
+          <Stat label="Expectancy" value={s.expectancyR === null ? "—" : `${s.expectancyR.toFixed(2)}R`} hint={`${formatMoney(s.expectancyCurrency, ws.currency)} / trade · R ${s.rSampleSize}/${s.totalTrades}`} />
+          <Stat label="Profit factor" value={s.profitFactor === null ? "n/a" : s.profitFactor.toFixed(2)} hint="Undefined without negative P&L" />
+          <Stat label="Max drawdown" value={formatMoney(s.maxDrawdown, ws.currency)} tone="down" hint={s.maxDrawdownPercent === null ? "No positive peak basis" : `${s.maxDrawdownPercent}% maximum percentage decline`} />
         </div>
       </section>
 
@@ -126,7 +126,8 @@ export default function DashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="p-0">
           <div className="chart-card">
-            <div className="card-heading"><div><p className="eyebrow mb-2">Cumulative record</p><h2>Equity curve</h2></div><span>01</span></div>
+            <div className="card-heading"><div><p className="eyebrow mb-2">Cumulative record</p><h2>Closed-trade performance</h2></div><span>01</span></div>
+            <p className="mb-3 text-xs leading-5 text-[var(--muted)]">Trade-performance curve, not a cash-flow-aware account valuation.</p>
             <EquityChart data={data.analytics.equity} currency={ws.currency} />
           </div>
         </Card>

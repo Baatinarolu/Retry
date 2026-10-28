@@ -158,6 +158,9 @@ export default function ReportsPage() {
         <p className="text-xs text-[var(--muted)]">
           Execution CSV: include <code>trade_id</code> (or <code>position_id</code>) on every fill plus <code>execution_type</code> = entry, scale_in, scale_out, or exit. Fills in one group become one execution-led trade. The original CSV is retained with the batch for reconciliation and rollback.
         </p>
+        <Banner tone="warn">
+          Cost convention: positive swap is a charge and negative swap is a credit; the app subtracts the signed swap value. Some brokers export a charge as negative, so reconcile the sign before import. Execution fees and trade-total commission are both deducted—do not map the same charge twice. Actual fill prices already include execution slippage; use the separate slippage-cost field only for a distinct estimate.
+        </Banner>
         <select className="select" value={accountId} onChange={(e) => { setAccountId(e.target.value); setPreview(null); }}>
           <option value="">Default account</option>
           {ws.accounts.map((a) => (

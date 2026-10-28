@@ -16,7 +16,7 @@ export const IMPORT_FIELD_DEFINITIONS = [
   { key: "pipValue", label: "Pip value", aliases: ["pip_value"] },
   { key: "totalCommission", label: "Trade-total commission", aliases: ["total_commission", "commission_total"] },
   { key: "commission", label: "Commission", aliases: ["commission", "fee", "fees"] },
-  { key: "swap", label: "Swap / funding", aliases: ["swap", "swap_fee", "funding"] },
+  { key: "swap", label: "Swap cost (positive charge; negative credit)", aliases: ["swap", "swap_fee", "funding"] },
   { key: "slippage", label: "Slippage", aliases: ["slippage"] },
   { key: "netPnl", label: "Summary net P&L", aliases: ["net_pnl", "pnl", "profit", "net", "total_pnl", "total_net_pnl"] },
   { key: "totalPnl", label: "Execution-group net P&L override", aliases: ["total_pnl", "total_net_pnl"] },
