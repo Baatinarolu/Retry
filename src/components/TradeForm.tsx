@@ -137,6 +137,7 @@ export function TradeForm({
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [applyingSpecification, setApplyingSpecification] = useState(false);
   const [offlineDraft, setOfflineDraft] = useState(false);
   const [localShots, setLocalShots] = useState<TradeScreenshot[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -302,6 +303,31 @@ export function TradeForm({
     }));
   }
 
+  async function applyInstrumentSpecification() {
+    setApplyingSpecification(true);
+    setError("");
+    try {
+      const data = await apiJson<{ instruments?: Instrument[] }>("/api/instruments");
+      const latest = data.instruments || [];
+      setInstruments(latest);
+      const instrument = latest.find((item) => item.symbol === form.instrument);
+      if (!instrument) throw new Error(`No saved instrument specification exists for ${form.instrument}`);
+      setForm((current) => ({
+        ...current,
+        marketCategory: instrument.category || current.marketCategory,
+        contractSize: instrument.contractSize,
+        tickSize: instrument.tickSize,
+        tickValue: instrument.tickValue,
+        pipSize: instrument.pipSize,
+        pipValue: instrument.pipValue,
+      }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load the instrument specification");
+    } finally {
+      setApplyingSpecification(false);
+    }
+  }
+
   const summaryMetrics = useMemo(
     () =>
       computeTradeMetrics({
@@ -354,6 +380,29 @@ export function TradeForm({
     }
   }, [executions, form]);
   const metrics = executionPreview.ledger?.metrics ?? summaryMetrics;
+  const calculationTrace = useMemo(() => {
+    if (executionPreview.ledger || form.status === "open" || !form.exitPrice) return "";
+    const entry = Number(form.entryPrice);
+    const exit = Number(form.exitPrice);
+    const quantity = Number(form.positionSize) > 0 ? Number(form.positionSize) : Number(form.lotSize || "1");
+    if (![entry, exit, quantity].every(Number.isFinite)) return "";
+    const move = form.direction === "long" ? exit - entry : entry - exit;
+    const tickSize = Number(form.tickSize);
+    const tickValue = Number(form.tickValue);
+    const pipSize = Number(form.pipSize);
+    const pipValue = Number(form.pipValue);
+    if (tickSize > 0 && tickValue > 0) {
+      return `${(move / tickSize).toFixed(4)} ticks × ${form.tickValue} ${currency} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+    }
+    if (pipSize > 0 && pipValue > 0) {
+      return `${(move / pipSize).toFixed(4)} pips × ${form.pipValue} ${currency} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+    }
+    const contractSize = Number(form.contractSize);
+    if (contractSize > 0) {
+      return `Price move ${move.toFixed(8)} × contract ${form.contractSize} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+    }
+    return `Price move ${move.toFixed(8)} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+  }, [currency, executionPreview.ledger, form, metrics.grossPnl]);
   const positionSizeForRisk = executionPreview.ledger?.positionSize ?? (form.positionSize || form.lotSize);
 
   useEffect(() => {
@@ -619,6 +668,10 @@ export function TradeForm({
           </div>
           <details className="editorial-details">
             <summary className="cursor-pointer text-sm text-[var(--muted)]">Contract specification (do not assume one size fits all)</summary>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="ghost" loading={applyingSpecification} onClick={() => void applyInstrumentSpecification()}>Use saved {form.instrument} specification</Button>
+              <p className="max-w-2xl text-xs leading-5 text-[var(--muted)]">Replace the contract/tick/pip fields in this editor with the latest template. Review the calculator, then {tradeId ? "Update trade" : "Save trade"} to keep the result.{form.pnlOverridden ? " Disable manual net override if you want calculated net P&L." : ""}</p>
+            </div>
             <div className="mt-3 grid gap-3 md:grid-cols-5">
               <Field label="Contract size"><Input value={form.contractSize} onChange={(e) => set("contractSize", e.target.value)} /></Field>
               <Field label="Tick size"><Input value={form.tickSize} onChange={(e) => set("tickSize", e.target.value)} /></Field>
@@ -642,6 +695,7 @@ export function TradeForm({
           <div className="card-heading"><h2>Calculator</h2><span>Live preview</span></div>
           <p className="text-xs text-[var(--muted)]">{executionPreview.ledger ? "Reconciled from your fills and contract specification." : "Uses your contract spec. Override if the broker result differs."}</p>
           <p className="text-xs leading-5 text-[var(--muted)]">{calculationBasis}</p>
+          {calculationTrace ? <p className="font-mono-num text-xs leading-5 text-[var(--muted)]">Breakdown: {calculationTrace}</p> : null}
           {quoteCurrency && quoteCurrency !== currency.toUpperCase() ? (
             <Banner>
               The current {form.instrument} template is quoted in {quoteCurrency}, while {selectedAccount?.name || "this account"} uses {currency}. No automatic {quoteCurrency} → {currency} trade-P&amp;L conversion is applied. Use pip/tick values already denominated in {currency}, or reconcile the broker result with a manual net override. Reporting FX rates do not rewrite this native calculation.

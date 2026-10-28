@@ -99,6 +99,9 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   const form = readFileSync("src/components/TradeForm.tsx", "utf8");
   assert.match(form, /No automatic \{quoteCurrency\} → \{currency\} trade-P&amp;L conversion/);
   assert.match(form, /calculationBasis/);
+  assert.match(form, /calculationTrace/);
+  assert.match(form, /Use saved \{form.instrument\} specification/);
+  assert.match(form, /apiJson<\{ instruments\?: Instrument\[\] \}>\("\/api\/instruments"\)/);
 });
 
 test("basic workspace options stay independent of risk profiles and FX-converted statistics", () => {

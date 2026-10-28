@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Decimal from "decimal.js";
 import {
   computePerformanceStats,
   computeTradeMetrics,
@@ -53,6 +54,13 @@ test("long trade computes gross, costs, risk, R, and holding time", () => {
 });
 
 test("AUDCHF short statement example stays a win with an NGN-denominated pip value", () => {
+  const chfNgn = new Decimal("1656.589743589743589743589743589");
+  const chfPerPipPerLot = new Decimal("100000").mul("0.0001");
+  const pipValue = chfPerPipPerLot.mul(chfNgn);
+  const quoteGross = new Decimal("0.58423").minus("0.58384").div("0.0001").mul(chfPerPipPerLot).mul("0.01");
+  assert.equal(quoteGross.toFixed(4), "0.3900");
+  assert.equal(quoteGross.mul(chfNgn).toFixed(4), "646.0700");
+
   const result = computeTradeMetrics({
     direction: "short",
     entryPrice: "0.58423",
@@ -65,8 +73,8 @@ test("AUDCHF short statement example stays a win with an NGN-denominated pip val
     tickSize: "0",
     tickValue: "0",
     pipSize: "0.0001",
-    // Statement-equivalent NGN per pip for 1.0 lot; not a live CHF/NGN quote.
-    pipValue: "16565.897435897435897435897435897",
+    // 10 CHF per pip per lot × statement-equivalent CHF/NGN conversion.
+    pipValue: pipValue.toString(),
     commission: "0",
     swap: "0",
     slippage: "0",
