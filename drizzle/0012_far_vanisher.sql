@@ -1,0 +1,1 @@
+ALTER TABLE "risk_settings" ADD COLUMN "prop_plan" jsonb DEFAULT '{"firmName":"","phases":[],"currentPhaseId":"","phaseStartedAt":"","phaseStartBalance":"","dailyDrawdownPercent":"0","dailyDrawdownBasis":"initial_balance","maxDrawdownPercent":"0","maxDrawdownMode":"initial_balance"}'::jsonb NOT NULL;

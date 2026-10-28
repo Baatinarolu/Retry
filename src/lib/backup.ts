@@ -1,5 +1,5 @@
 import { ALLOWED_IMAGE_TYPES, MAX_UPLOAD_BYTES } from "@/lib/constants";
-import { settingsSchema } from "@/lib/validations";
+import { propPlanSchema, settingsSchema } from "@/lib/validations";
 import { z } from "zod";
 
 export const BACKUP_KIND = "trademind-workspace";
@@ -73,7 +73,14 @@ export type BackupEnvelope = {
 export function parseBackup(input: unknown): BackupEnvelope {
   const parsed = backupEnvelopeSchema.safeParse(input);
   if (!parsed.success) throw new Error(`Invalid workspace backup: ${parsed.error.issues[0]?.message || "invalid structure"}`);
-  return parsed.data as BackupEnvelope;
+  const backup = parsed.data as BackupEnvelope;
+  for (const row of backup.data.riskSettings) {
+    if (row.propPlan === undefined) continue;
+    const plan = propPlanSchema.safeParse(row.propPlan);
+    if (!plan.success) throw new Error(`Invalid workspace backup: riskSettings propPlan ${plan.error.issues[0]?.message || "is invalid"}`);
+    row.propPlan = plan.data;
+  }
+  return backup;
 }
 
 function idSet(rows: BackupRow[], table: string) {

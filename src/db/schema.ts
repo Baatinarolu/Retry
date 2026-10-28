@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type { PropPlan } from "@/lib/prop-risk";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -144,6 +145,17 @@ export const riskSettings = pgTable(
     minPlannedRr: numeric("min_planned_rr", { precision: 8, scale: 2 }).notNull().default("2"),
     dailyProfitTarget: numeric("daily_profit_target", { precision: 18, scale: 2 }).notNull().default("0"),
     maxPositionSize: numeric("max_position_size", { precision: 18, scale: 4 }).notNull().default("0"),
+    propPlan: jsonb("prop_plan").$type<PropPlan>().notNull().default({
+      firmName: "",
+      phases: [],
+      currentPhaseId: "",
+      phaseStartedAt: "",
+      phaseStartBalance: "",
+      dailyDrawdownPercent: "0",
+      dailyDrawdownBasis: "initial_balance",
+      maxDrawdownPercent: "0",
+      maxDrawdownMode: "initial_balance",
+    }),
     personalRules: text("personal_rules").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

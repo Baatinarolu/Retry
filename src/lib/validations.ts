@@ -408,6 +408,52 @@ export const backtestTradeSchema = z
     message: "Exit time cannot be before entry time",
   });
 
+function propDecimalString(max: number) {
+  return z.string().trim().max(64).refine((value) => {
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return false;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 && number <= max;
+  }, `Enter a number from 0 to ${max}`);
+}
+
+const phaseStartBalanceString = z.string().trim().max(64).refine((value) => {
+  if (value === "") return true;
+  if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) return false;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
+}, "Phase starting balance must be positive or empty");
+
+export const propPlanSchema = z.object({
+  firmName: z.string().trim().max(120),
+  phases: z.array(z.object({
+    id: z.string().trim().min(1).max(64),
+    name: z.string().trim().min(1).max(80),
+    targetPercent: propDecimalString(1000),
+  }).strict()).max(100),
+  currentPhaseId: z.string().trim().max(64),
+  phaseStartedAt: z.string().trim().max(40).refine((value) => value === "" || (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    && !Number.isNaN(Date.parse(value))
+  ), "Use an ISO phase start time with Z or a UTC offset"),
+  phaseStartBalance: phaseStartBalanceString,
+  dailyDrawdownPercent: propDecimalString(100),
+  dailyDrawdownBasis: z.enum(["initial_balance", "day_start_balance"]),
+  maxDrawdownPercent: propDecimalString(100),
+  maxDrawdownMode: z.enum(["initial_balance", "trailing_balance"]),
+}).strict().superRefine((plan, context) => {
+  const ids = new Set<string>();
+  for (const [index, phase] of plan.phases.entries()) {
+    if (ids.has(phase.id)) context.addIssue({ code: "custom", message: "Phase IDs must be unique", path: ["phases", index, "id"] });
+    ids.add(phase.id);
+  }
+  const current = plan.phases.find((phase) => phase.id === plan.currentPhaseId);
+  if (plan.currentPhaseId && !current) context.addIssue({ code: "custom", message: "Select a phase from this plan", path: ["currentPhaseId"] });
+  if (current) {
+    if (!plan.phaseStartedAt) context.addIssue({ code: "custom", message: "Set the active phase start time", path: ["phaseStartedAt"] });
+    if (!plan.phaseStartBalance) context.addIssue({ code: "custom", message: "Set the active phase starting balance", path: ["phaseStartBalance"] });
+  }
+});
+
 export const riskSchema = z.object({
   accountId: z.string().uuid().nullable().optional(),
   defaultRiskPercent: optionalUpdateNonNegative.refine(
@@ -423,6 +469,7 @@ export const riskSchema = z.object({
   dailyProfitTarget: optionalUpdateNonNegative,
   maxPositionSize: optionalUpdateNonNegative,
   personalRules: z.string().max(10_000).optional(),
+  propPlan: propPlanSchema.optional(),
 });
 
 export const riskCheckSchema = z.object({

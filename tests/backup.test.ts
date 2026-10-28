@@ -106,3 +106,29 @@ test("timestamp revival preserves calendar dates and rejects malformed instants"
   backup.data.trades[0].entryAt = "not-a-date";
   assert.throws(() => reviveBackupData(backup.data), /invalid timestamp/);
 });
+
+test("risk-setting backups accept legacy rows and preserve prop-plan JSON", () => {
+  const legacy = emptyBackup();
+  legacy.data.riskSettings.push({ id: tradeId, accountId, maxDailyLoss: "100", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+  const parsedLegacy = parseBackup(legacy);
+  assert.equal("propPlan" in parsedLegacy.data.riskSettings[0], false);
+
+  const current = emptyBackup();
+  const propPlan = {
+    firmName: "Example",
+    phases: [{ id: "phase-1", name: "Phase 1", targetPercent: "8" }],
+    currentPhaseId: "phase-1",
+    phaseStartedAt: "2026-01-01T00:00:00.000Z",
+    phaseStartBalance: "100000",
+    dailyDrawdownPercent: "4",
+    dailyDrawdownBasis: "initial_balance",
+    maxDrawdownPercent: "10",
+    maxDrawdownMode: "trailing_balance",
+  };
+  current.data.riskSettings.push({ id: tradeId, accountId, propPlan, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+  const revived = reviveBackupData(parseBackup(current).data);
+  assert.deepEqual(revived.riskSettings[0].propPlan, propPlan);
+  assert.equal(revived.riskSettings[0].createdAt instanceof Date, true);
+  current.data.riskSettings[0].propPlan = { ...propPlan, dailyDrawdownPercent: "101" };
+  assert.throws(() => parseBackup(current), /riskSettings propPlan/);
+});

@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { riskSettings, trades, tradingAccounts } from "@/db/schema";
+import { cashFlows, riskSettings, trades, tradingAccounts } from "@/db/schema";
 import { jsonError, requireUser } from "@/lib/api";
 import { calendarDayBounds, zonedDayKey, zonedWeekBounds } from "@/lib/reporting";
 import { reportingContextFor } from "@/lib/queries";
+import { evaluatePropRisk, phaseBaselineIsStale, propPlanIsActive, type PropRiskEvaluation } from "@/lib/prop-risk";
 import { riskCheckSchema, riskSchema } from "@/lib/validations";
 import Decimal from "decimal.js";
 import { and, eq, gte, lt } from "drizzle-orm";
@@ -19,24 +20,59 @@ async function ownedAccount(userId: string, accountId?: string | null) {
   return account ?? null;
 }
 
+async function storedPropRisk(
+  userId: string,
+  account: typeof tradingAccounts.$inferSelect,
+  settings: typeof riskSettings.$inferSelect,
+  plannedRisk: string | number,
+  timeZone: string,
+  dayWindow?: { start: Date; end: Date },
+): Promise<PropRiskEvaluation | null> {
+  if (!propPlanIsActive(settings.propPlan)) return null;
+  const { start, end } = dayWindow ?? calendarDayBounds(zonedDayKey(new Date(), timeZone), timeZone);
+  const [history, historyCashFlows] = await Promise.all([
+    db.select().from(trades).where(and(eq(trades.userId, userId), eq(trades.accountId, account.id))),
+    db.select().from(cashFlows).where(and(eq(cashFlows.userId, userId), eq(cashFlows.accountId, account.id))),
+  ]);
+  return evaluatePropRisk({
+    plan: settings.propPlan,
+    startingBalance: account.startingBalance,
+    currentBalance: account.currentBalance,
+    trades: history,
+    cashFlows: historyCashFlows,
+    dayStart: start,
+    dayEnd: end,
+    plannedRisk,
+  });
+}
+
 export async function GET(req: NextRequest) {
-  const { session, error } = await requireUser();
+  const { session, user, error } = await requireUser();
   if (error) return error;
   const accountId = new URL(req.url).searchParams.get("accountId");
-  if (accountId && !(await ownedAccount(session!.uid, accountId))) return jsonError("Account not found", 404);
+  const requestedAccount = accountId ? await ownedAccount(session!.uid, accountId) : null;
+  if (accountId && !requestedAccount) return jsonError("Account not found", 404);
   const list = await db.select().from(riskSettings).where(eq(riskSettings.userId, session!.uid));
   const settings = accountId ? list.find((row) => row.accountId === accountId) : list[0];
   if (accountId && !settings) return jsonError("No risk profile for this account", 404);
-  return NextResponse.json({ settings, all: list });
+  const account = requestedAccount ?? (settings?.accountId ? await ownedAccount(session!.uid, settings.accountId) : null);
+  const propRisk = account && settings ? await storedPropRisk(session!.uid, account, settings, "0", user!.timezone) : null;
+  return NextResponse.json({ settings, all: list, propRisk });
 }
 
 export async function PATCH(req: NextRequest) {
-  const { session, error } = await requireUser({ write: true });
+  const { session, user, error } = await requireUser({ write: true });
   if (error) return error;
   const parsed = riskSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(parsed.error.issues[0]?.message || "Invalid risk settings");
-  if (parsed.data.accountId && !(await ownedAccount(session!.uid, parsed.data.accountId))) {
-    return jsonError("Account not found", 404);
+  const account = parsed.data.accountId ? await ownedAccount(session!.uid, parsed.data.accountId) : null;
+  if (parsed.data.accountId && !account) return jsonError("Account not found", 404);
+  if (parsed.data.propPlan && (propPlanIsActive(parsed.data.propPlan) || parsed.data.propPlan.firmName || parsed.data.propPlan.phases.length > 0)) {
+    if (!account) return jsonError("Select an individual prop account before saving prop rules");
+    if (account.accountType !== "prop") return jsonError("Prop rules can only be enabled on a prop account");
+  }
+  if (parsed.data.propPlan?.phaseStartedAt && new Date(parsed.data.propPlan.phaseStartedAt).getTime() > Date.now()) {
+    return jsonError("Phase start time cannot be in the future");
   }
 
   const list = await db.select().from(riskSettings).where(eq(riskSettings.userId, session!.uid));
@@ -44,6 +80,9 @@ export async function PATCH(req: NextRequest) {
     ? list.find((row) => row.accountId === parsed.data.accountId)
     : list[0];
   if (!current) return jsonError("No risk profile yet", 404);
+  if (parsed.data.propPlan && phaseBaselineIsStale(current.propPlan, parsed.data.propPlan)) {
+    return jsonError("Set a new phase start time and confirm the starting balance when changing the active phase");
+  }
   const value = (next: string | number | undefined, previous: string) =>
     next === undefined || next === "" ? previous : String(next);
   const [row] = await db
@@ -59,11 +98,13 @@ export async function PATCH(req: NextRequest) {
       dailyProfitTarget: value(parsed.data.dailyProfitTarget, current.dailyProfitTarget),
       maxPositionSize: value(parsed.data.maxPositionSize, current.maxPositionSize),
       personalRules: parsed.data.personalRules ?? current.personalRules,
+      propPlan: parsed.data.propPlan ?? current.propPlan,
       updatedAt: new Date(),
     })
     .where(eq(riskSettings.id, current.id))
     .returning();
-  return NextResponse.json({ settings: row });
+  const propRisk = account ? await storedPropRisk(session!.uid, account, row, "0", user!.timezone) : null;
+  return NextResponse.json({ settings: row, propRisk });
 }
 
 export async function POST(req: NextRequest) {
@@ -163,10 +204,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let propRisk: PropRiskEvaluation | null = null;
+  if (account && settings && propPlanIsActive(settings.propPlan)) {
+    propRisk = await storedPropRisk(session!.uid, account, settings, parsed.data.plannedRisk, timeZone, { start, end: tomorrow });
+    warnings.push(...(propRisk?.warnings ?? []));
+  } else if (!account && settings && propPlanIsActive(settings.propPlan)) {
+    warnings.push("Select an individual prop account to evaluate its percentage drawdown and phase rules.");
+  }
+
+  const dailyLossRemainders = [
+    settings && Number(settings.maxDailyLoss) > 0 ? Number(settings.maxDailyLoss) + dailyPnl : null,
+    propRisk?.daily ? Number(propRisk.daily.remaining) : null,
+  ].filter((value): value is number => value !== null);
+
   return NextResponse.json({
     warnings,
-    remainingDailyLoss:
-      settings && Number(settings.maxDailyLoss) > 0 ? Number(settings.maxDailyLoss) + dailyPnl : null,
+    remainingDailyLoss: dailyLossRemainders.length ? Math.min(...dailyLossRemainders) : null,
+    propRisk,
     tradesToday: todayEntries.length,
     realizedTradesToday: todayTrades.length,
     consecutiveLosses: streak,

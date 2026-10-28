@@ -154,13 +154,20 @@ export default function SettingsPage() {
             </li>
           ))}
         </ul>
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-6">
           <Input placeholder="Name" value={acc.name} onChange={(e) => setAcc({ ...acc, name: e.target.value })} />
           <Input placeholder="Broker" value={acc.broker} onChange={(e) => setAcc({ ...acc, broker: e.target.value })} />
-          <Select value={acc.currency} onChange={(e) => setAcc({ ...acc, currency: e.target.value })}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select>
+          <Select aria-label="Account type" value={acc.accountType} onChange={(e) => setAcc({ ...acc, accountType: e.target.value })}>
+            <option value="live">Live</option>
+            <option value="prop">Prop</option>
+            <option value="demo">Demo</option>
+            <option value="paper">Paper</option>
+          </Select>
+          <Select aria-label="Account currency" value={acc.currency} onChange={(e) => setAcc({ ...acc, currency: e.target.value })}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select>
           <Input placeholder="Starting" value={acc.startingBalance} onChange={(e) => setAcc({ ...acc, startingBalance: e.target.value })} />
           <Button onClick={async () => { await fetch("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(acc) }); reload(); }}>Add</Button>
         </div>
+        <p className="text-xs leading-5 text-[var(--muted)]">For a prop account, open Risk management and select that account to configure its firm, phases, profit targets, and percentage drawdown rules.</p>
       </Card>
 
       <CashFlowPanel accounts={accounts} onChanged={reload} />

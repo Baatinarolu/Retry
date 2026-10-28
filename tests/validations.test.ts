@@ -129,3 +129,39 @@ test("passwords cannot exceed bcrypt's 72-byte input boundary", () => {
   assert.equal(signupSchema.safeParse({ ...base, password: "a".repeat(73) }).success, false);
   assert.equal(signupSchema.safeParse({ ...base, password: "🔐".repeat(19) }).success, false);
 });
+
+const validPropPlan = {
+  firmName: "Example Futures",
+  phases: [
+    { id: "phase-1", name: "Phase 1", targetPercent: "8" },
+    { id: "phase-2", name: "Phase 2", targetPercent: "5" },
+  ],
+  currentPhaseId: "phase-2",
+  phaseStartedAt: "2026-01-10T00:00:00.000Z",
+  phaseStartBalance: "100000",
+  dailyDrawdownPercent: "4",
+  dailyDrawdownBasis: "day_start_balance",
+  maxDrawdownPercent: "10",
+  maxDrawdownMode: "trailing_balance",
+};
+
+test("prop plans validate phase baselines, percentages, and phase ownership", () => {
+  assert.equal(riskSchema.safeParse({ propPlan: validPropPlan }).success, true);
+  assert.equal(riskSchema.safeParse({ maxDailyLoss: "100" }).success, true);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phaseStartedAt: "" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phaseStartedAt: "2026-01-10" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phaseStartedAt: "2026-01-10T01:00:00+01:00" } }).success, true);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phaseStartBalance: "0" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, currentPhaseId: "unknown" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, dailyDrawdownPercent: "101" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, maxDrawdownPercent: "1e2" } }).success, false);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, unexpected: true } }).success, false);
+});
+
+test("prop plans reject duplicate phase IDs and bound request-sized stage lists", () => {
+  const duplicate = { ...validPropPlan, phases: [validPropPlan.phases[0], validPropPlan.phases[0]] };
+  assert.equal(riskSchema.safeParse({ propPlan: duplicate }).success, false);
+  const makePhases = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `phase-${index}`, name: `Phase ${index}`, targetPercent: "0" }));
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phases: makePhases(13), currentPhaseId: "" } }).success, true);
+  assert.equal(riskSchema.safeParse({ propPlan: { ...validPropPlan, phases: makePhases(101), currentPhaseId: "" } }).success, false);
+});
