@@ -83,7 +83,16 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   const fxPanel = readFileSync("src/components/FxRatesPanel.tsx", "utf8");
   assert.match(fxPanel, /Rate \(target per 1 source\)/);
   assert.match(fxPanel, /starting balances use the latest rate effective at the report time/);
+  assert.match(fxPanel, /Use current UTC time/);
+  assert.match(fxPanel, /id="fx-rates"/);
+  assert.match(fxPanel, /saved for/);
   assert.doesNotMatch(fxPanel, /placeholder="0\.000666667"/);
+  const errorBanner = readFileSync("src/components/ReportingErrorBanner.tsx", "utf8");
+  assert.match(errorBanner, /Open report filters/);
+  assert.match(errorBanner, /settings#fx-rates/);
+  for (const page of ["dashboard", "analytics", "calendar", "reports", "psychology"]) {
+    assert.match(readFileSync(`src/app/(app)/${page}/page.tsx`, "utf8"), /ReportingErrorBanner/);
+  }
   const settings = readFileSync("src/app/(app)/settings/page.tsx", "utf8");
   assert.match(settings, /Pip value \(account currency \/ lot\)/);
   assert.match(settings, /Quote currency/);

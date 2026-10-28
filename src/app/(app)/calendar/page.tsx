@@ -2,6 +2,7 @@
 
 import { Filters } from "@/components/Filters";
 import { FxConversionNotice } from "@/components/FxConversionNotice";
+import { ReportingErrorBanner } from "@/components/ReportingErrorBanner";
 import { Banner, Button, Card } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, formatR, pnlClass } from "@/lib/format";
@@ -82,7 +83,7 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-7">
-      {ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : null}
+      {ws.error || error ? <ReportingErrorBanner message={ws.error || error} /> : null}
       <FxConversionNotice conversion={conversion} />
       <div className="page-heading">
         <div>

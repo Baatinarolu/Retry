@@ -3,6 +3,7 @@
 import { DistBars, EquityChart } from "@/components/Charts";
 import { Filters } from "@/components/Filters";
 import { FxConversionNotice } from "@/components/FxConversionNotice";
+import { ReportingErrorBanner } from "@/components/ReportingErrorBanner";
 import { Banner, Card, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, formatPct, pnlClass } from "@/lib/format";
@@ -31,14 +32,25 @@ export default function AnalyticsPage() {
   }, [workspaceLoading, loadAnalytics]);
 
   if (workspaceLoading || !data) {
-    return ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : <Spinner label="Running analytics engine" />;
+    const loadError = ws.error || error;
+    if (loadError) {
+      return (
+        <div className="space-y-7">
+          <ReportingErrorBanner message={loadError} />
+          <section className="filter-panel" aria-label="Analytics filters">
+            <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
+          </section>
+        </div>
+      );
+    }
+    return <Spinner label="Running analytics engine" />;
   }
   const a = data.analytics;
   const s = a.stats;
 
   return (
     <div className="space-y-7">
-      {error ? <Banner tone="warn">{error}</Banner> : null}
+      {error ? <ReportingErrorBanner message={error} /> : null}
       <FxConversionNotice conversion={data.conversion} />
       <div className="page-heading">
         <div>

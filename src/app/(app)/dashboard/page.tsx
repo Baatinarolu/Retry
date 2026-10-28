@@ -3,6 +3,7 @@
 import { EquityChart, PnlBars } from "@/components/Charts";
 import { Filters } from "@/components/Filters";
 import { FxConversionNotice } from "@/components/FxConversionNotice";
+import { ReportingErrorBanner } from "@/components/ReportingErrorBanner";
 import { Banner, Card, Empty, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { apiJson } from "@/lib/client-api";
@@ -45,7 +46,18 @@ export default function DashboardPage() {
   }, [workspaceLoading, loadAnalytics, loadTrades, loadReviewQueue]);
 
   if (workspaceLoading || !data) {
-    return ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : <Spinner label="Calculating live statistics" />;
+    const loadError = ws.error || error;
+    if (loadError) {
+      return (
+        <div className="space-y-7">
+          <ReportingErrorBanner message={loadError} />
+          <section className="filter-panel" aria-label="Dashboard filters">
+            <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
+          </section>
+        </div>
+      );
+    }
+    return <Spinner label="Calculating live statistics" />;
   }
   const s = data.analytics?.stats;
   if (!s || s.totalTrades === 0) {
@@ -63,7 +75,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7">
-      {error ? <Banner tone="warn">{error}</Banner> : null}
+      {error ? <ReportingErrorBanner message={error} /> : null}
       <FxConversionNotice conversion={data.conversion} />
       <div className="page-heading">
         <div>

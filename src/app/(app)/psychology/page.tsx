@@ -1,6 +1,7 @@
 "use client";
 
 import { FxConversionNotice } from "@/components/FxConversionNotice";
+import { ReportingErrorBanner } from "@/components/ReportingErrorBanner";
 import { Banner, Button, Card, Spinner, Stat } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
 import { formatMoney, pnlClass } from "@/lib/format";
@@ -27,7 +28,7 @@ export default function PsychologyPage() {
       });
     return () => controller.abort();
   }, [workspaceLoading, loadAnalytics]);
-  if (workspaceLoading || !data) return ws.error || error ? <Banner tone="warn">{ws.error || error}</Banner> : <Spinner />;
+  if (workspaceLoading || !data) return ws.error || error ? <ReportingErrorBanner message={ws.error || error} /> : <Spinner />;
   const a = data.analytics;
 
   return (

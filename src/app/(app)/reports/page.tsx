@@ -2,6 +2,7 @@
 
 import { Filters } from "@/components/Filters";
 import { ImportMappingPresets } from "@/components/ImportMappingPresets";
+import { ReportingErrorBanner } from "@/components/ReportingErrorBanner";
 import { FxConversionNotice } from "@/components/FxConversionNotice";
 import { Banner, Button, Card } from "@/components/ui";
 import { useWorkspace } from "@/components/useWorkspace";
@@ -127,7 +128,7 @@ export default function ReportsPage() {
       <section className="filter-panel no-print" aria-label="Report filters">
         <Filters value={ws.filters} onChange={ws.setFilters} accounts={ws.accounts} instruments={ws.instruments} strategies={ws.strategies} />
       </section>
-      {reportError ? <Banner tone="warn">{reportError} Add the required dated rate in Settings → FX rates.</Banner> : null}
+      {reportError ? <ReportingErrorBanner message={reportError} /> : null}
       {report ? (
         <Card>
           <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{APP_NAME}</p>
