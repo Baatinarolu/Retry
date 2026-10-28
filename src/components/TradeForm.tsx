@@ -48,6 +48,10 @@ function localNow() {
   return toLocalInput(new Date());
 }
 
+function displayFactor(value: number) {
+  return Number(value.toPrecision(12)).toString();
+}
+
 const empty = {
   accountId: "",
   strategyId: "",
@@ -63,8 +67,8 @@ const empty = {
   exitPrice: "",
   stopLoss: "",
   takeProfit: "",
-  positionSize: "0.5",
-  lotSize: "0.5",
+  positionSize: "",
+  lotSize: "",
   contractSize: "1",
   tickSize: "0",
   tickValue: "0",
@@ -131,6 +135,7 @@ export function TradeForm({
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [instrumentsLoaded, setInstrumentsLoaded] = useState(false);
   const [executions, setExecutions] = useState<
     { type: "entry" | "scale_in" | "scale_out" | "exit"; price: string; quantity: string; executedAt: string; fees: string; notes: string }[]
   >([]);
@@ -149,7 +154,12 @@ export function TradeForm({
   const selectedAccount = accounts.find((account) => account.id === form.accountId);
   const currency = selectedAccount?.currency || "USD";
   const selectedInstrument = instruments.find((instrument) => instrument.symbol === form.instrument);
+  const specificationMatchesTemplate = selectedInstrument
+    ? (["contractSize", "tickSize", "tickValue", "pipSize", "pipValue"] as const)
+      .every((key) => Number(form[key]) === Number(selectedInstrument[key]))
+    : false;
   const quoteCurrency = selectedInstrument?.quoteCurrency?.toUpperCase();
+  const manualPnlAllowed = form.status === "closed" || executions.length > 0;
   const calculationBasis = Number(form.tickSize) > 0 && Number(form.tickValue) > 0
     ? `Tick method: (directional price move ÷ ${form.tickSize}) × ${form.tickValue} ${currency} × quantity.`
     : Number(form.pipSize) > 0 && Number(form.pipValue) > 0
@@ -182,7 +192,29 @@ export function TradeForm({
       setInstruments(boot.instruments || []);
       setStrategies(strat.strategies || []);
       setTags(tag.tags || []);
-      setForm((f) => ({ ...f, accountId: f.accountId || boot.accounts?.[0]?.id || "" }));
+      setInstrumentsLoaded(true);
+      setForm((current) => {
+        const hasDraft = Boolean(localStorage.getItem(draftKey));
+        const specificationUntouched = (["contractSize", "tickSize", "tickValue", "pipSize", "pipValue"] as const)
+          .every((key) => current[key] === empty[key]);
+        const instrument = tradeId || hasDraft || !specificationUntouched
+          ? undefined
+          : boot.instruments?.find((item) => item.symbol === current.instrument);
+        return {
+          ...current,
+          accountId: current.accountId || boot.accounts?.[0]?.id || "",
+          ...(instrument
+            ? {
+                marketCategory: instrument.category || current.marketCategory,
+                contractSize: instrument.contractSize,
+                tickSize: instrument.tickSize,
+                tickValue: instrument.tickValue,
+                pipSize: instrument.pipSize,
+                pipValue: instrument.pipValue,
+              }
+            : {}),
+        };
+      });
     }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load accounts and strategy data."));
     if (tradeId) {
       fetch(`/api/trades/${tradeId}`)
@@ -271,7 +303,7 @@ export function TradeForm({
         })
         .catch(() => setError("Could not load this trade."));
     }
-  }, [tradeId, restoreDraft]);
+  }, [tradeId, draftKey, restoreDraft]);
 
   useEffect(() => {
     if (tradeId) return;
@@ -384,18 +416,18 @@ export function TradeForm({
     if (executionPreview.ledger || form.status === "open" || !form.exitPrice) return "";
     const entry = Number(form.entryPrice);
     const exit = Number(form.exitPrice);
-    const quantity = Number(form.positionSize) > 0 ? Number(form.positionSize) : Number(form.lotSize || "1");
-    if (![entry, exit, quantity].every(Number.isFinite)) return "";
+    const quantity = Number(form.positionSize || form.lotSize);
+    if (![entry, exit, quantity].every(Number.isFinite) || quantity <= 0) return "";
     const move = form.direction === "long" ? exit - entry : entry - exit;
     const tickSize = Number(form.tickSize);
     const tickValue = Number(form.tickValue);
     const pipSize = Number(form.pipSize);
     const pipValue = Number(form.pipValue);
     if (tickSize > 0 && tickValue > 0) {
-      return `${(move / tickSize).toFixed(4)} ticks × ${form.tickValue} ${currency} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+      return `${(move / tickSize).toFixed(4)} ticks × ${displayFactor(tickValue * quantity)} ${currency} per tick for this position = ${metrics.grossPnl} ${currency}`;
     }
     if (pipSize > 0 && pipValue > 0) {
-      return `${(move / pipSize).toFixed(4)} pips × ${form.pipValue} ${currency} × quantity ${quantity} = ${metrics.grossPnl} ${currency}`;
+      return `${(move / pipSize).toFixed(4)} pips × ${displayFactor(pipValue * quantity)} ${currency} per pip for this position = ${metrics.grossPnl} ${currency}`;
     }
     const contractSize = Number(form.contractSize);
     if (contractSize > 0) {
@@ -447,6 +479,9 @@ export function TradeForm({
     setSaving(true);
     try {
       if (executionPreview.error) throw new Error(executionPreview.error);
+      if (!executions.length && !(Number(form.positionSize || form.lotSize) > 0)) {
+        throw new Error("Enter the lot size or contract quantity exactly as shown by your broker.");
+      }
       if (!executions.length && form.status === "closed" && (!form.exitAt || !form.exitPrice)) {
         throw new Error("Closed trades need an exit time and exit price.");
       }
@@ -545,6 +580,41 @@ export function TradeForm({
       <div className="grid gap-4 lg:grid-cols-[1.6fr_0.9fr]">
         <section className="card space-y-4 p-5">
           <div className="card-heading"><h2>Execution</h2><span>01 / Trade record</span></div>
+          <fieldset>
+            <legend className="eyebrow mb-2">How should we record P&amp;L?</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={`card-quiet flex cursor-pointer items-start gap-3 p-3 ${!form.pnlOverridden ? "border-[var(--accent)]" : ""}`}>
+                <input className="mt-1" type="radio" name="pnl-entry-method" checked={!form.pnlOverridden} onChange={() => set("pnlOverridden", false)} />
+                <span>
+                  <span className="block text-sm font-medium">Calculate automatically</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Use the saved symbol settings. You only enter prices and position size—no pip math.</span>
+                </span>
+              </label>
+              <label className={`card-quiet flex items-start gap-3 p-3 ${manualPnlAllowed ? "cursor-pointer" : "opacity-50"} ${form.pnlOverridden ? "border-[var(--accent)]" : ""}`}>
+                <input className="mt-1" type="radio" name="pnl-entry-method" checked={form.pnlOverridden} disabled={!manualPnlAllowed} onChange={() => set("pnlOverridden", true)} />
+                <span>
+                  <span className="block text-sm font-medium">Use broker P&amp;L</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Simplest when pip/tick values are unknown. Copy the final profit or loss from your broker.</span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+          {form.pnlOverridden && manualPnlAllowed ? (
+            <Field label={`Final net P&L from broker (${currency})`} hint="Copy the final amount after broker costs. Use a minus sign for a loss, for example -250.50.">
+              <Input inputMode="decimal" value={form.overrideNetPnl} onChange={(e) => set("overrideNetPnl", e.target.value)} placeholder="646.07 or -250.50" required />
+            </Field>
+          ) : null}
+          {!form.pnlOverridden && instrumentsLoaded ? (
+            specificationMatchesTemplate ? (
+              <Banner tone="good">Saved {form.instrument} settings are loaded. Enter the trade prices and size; no contract, tick, or pip values are needed from you.</Banner>
+            ) : selectedInstrument ? (
+              <Banner tone="warn">
+                This trade&apos;s calculation settings differ from the saved {form.instrument} template. <button type="button" className="font-medium underline" onClick={() => void applyInstrumentSpecification()}>Load saved settings</button> or review the advanced fields before saving.
+              </Banner>
+            ) : (
+              <Banner tone="warn">No saved template was found for {form.instrument}. Use broker P&amp;L for the simplest entry, or review the advanced calculation settings before saving.</Banner>
+            )
+          ) : null}
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Account">
               <Select value={form.accountId} onChange={(e) => set("accountId", e.target.value)} required>
@@ -619,22 +689,33 @@ export function TradeForm({
               />
             </Field>
             <Field label="Status">
-              <Select value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <Select
+                value={form.status}
+                onChange={(e) => {
+                  const status = e.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    status,
+                    pnlOverridden: status === "open" && executions.length === 0 ? false : current.pnlOverridden,
+                  }));
+                }}
+              >
                 <option value="closed">Closed</option>
                 <option value="open">Open</option>
               </Select>
             </Field>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Entry price">
+            <Field label="Entry price" hint="Copy the price from your broker.">
               <Input
+                inputMode="decimal"
                 value={executionPreview.ledger?.entryPrice ?? form.entryPrice}
                 onChange={(e) => set("entryPrice", e.target.value)}
                 readOnly={executions.length > 0}
                 required={executions.length === 0}
               />
             </Field>
-            <Field label="Exit price">
+            <Field label="Exit price" hint="Use the final exit price.">
               <Input
                 inputMode="decimal"
                 value={executionPreview.ledger ? (executionPreview.ledger.exitPrice ?? "") : form.exitPrice}
@@ -643,68 +724,79 @@ export function TradeForm({
                 required={form.status === "closed" && executions.length === 0}
               />
             </Field>
-            <Field label="Stop loss">
-              <Input value={form.stopLoss} onChange={(e) => set("stopLoss", e.target.value)} />
+            <Field label="Stop loss (optional)">
+              <Input inputMode="decimal" value={form.stopLoss} onChange={(e) => set("stopLoss", e.target.value)} />
             </Field>
-            <Field label="Take profit">
-              <Input value={form.takeProfit} onChange={(e) => set("takeProfit", e.target.value)} />
+            <Field label="Take profit (optional)">
+              <Input inputMode="decimal" value={form.takeProfit} onChange={(e) => set("takeProfit", e.target.value)} />
             </Field>
-            <Field label="Lot / contracts">
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <Field
+              label={form.marketCategory === "forex" ? "Lot size" : "Quantity / contracts"}
+              hint="Copy this exactly—for example 0.01. Do not convert lots into units."
+            >
               <Input
+                inputMode="decimal"
                 value={executionPreview.ledger?.positionSize ?? form.lotSize}
                 onChange={(e) => { set("lotSize", e.target.value); set("positionSize", e.target.value); }}
                 readOnly={executions.length > 0}
+                required={executions.length === 0}
+                placeholder="0.01"
               />
-            </Field>
-            <Field label="Commission">
-              <Input value={form.commission} onChange={(e) => set("commission", e.target.value)} />
-            </Field>
-            <Field label="Swap / funding">
-              <Input value={form.swap} onChange={(e) => set("swap", e.target.value)} />
-            </Field>
-            <Field label="Slippage cost">
-              <Input value={form.slippage} onChange={(e) => set("slippage", e.target.value)} />
             </Field>
           </div>
           <details className="editorial-details">
-            <summary className="cursor-pointer text-sm text-[var(--muted)]">Contract specification (do not assume one size fits all)</summary>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button type="button" variant="ghost" loading={applyingSpecification} onClick={() => void applyInstrumentSpecification()}>Use saved {form.instrument} specification</Button>
-              <p className="max-w-2xl text-xs leading-5 text-[var(--muted)]">Replace the contract/tick/pip fields in this editor with the latest template. Review the calculator, then {tradeId ? "Update trade" : "Save trade"} to keep the result.{form.pnlOverridden ? " Disable manual net override if you want calculated net P&L." : ""}</p>
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-5">
-              <Field label="Contract size"><Input value={form.contractSize} onChange={(e) => set("contractSize", e.target.value)} /></Field>
-              <Field label="Tick size"><Input value={form.tickSize} onChange={(e) => set("tickSize", e.target.value)} /></Field>
-              <Field label={`Tick value / lot (${currency})`}><Input value={form.tickValue} onChange={(e) => set("tickValue", e.target.value)} /></Field>
-              <Field label="Pip size"><Input value={form.pipSize} onChange={(e) => set("pipSize", e.target.value)} /></Field>
-              <Field label={`Pip value / lot (${currency})`}><Input value={form.pipValue} onChange={(e) => set("pipValue", e.target.value)} /></Field>
+            <summary>Fees &amp; adjustments (optional)</summary>
+            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">Costs affect automatic net P&amp;L. They do not change a broker-entered net result.</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <Field label={`Commission (${currency})`}><Input inputMode="decimal" value={form.commission} onChange={(e) => set("commission", e.target.value)} /></Field>
+              <Field label={`Swap / funding (${currency})`}><Input inputMode="decimal" value={form.swap} onChange={(e) => set("swap", e.target.value)} /></Field>
+              <Field label={`Slippage cost (${currency})`}><Input inputMode="decimal" value={form.slippage} onChange={(e) => set("slippage", e.target.value)} /></Field>
             </div>
           </details>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.pnlOverridden} onChange={(e) => set("pnlOverridden", e.target.checked)} />
-            Override net P&amp;L (broker reconciliation)
-          </label>
-          {form.pnlOverridden ? (
-            <Field label={`Manual net P&L (${currency})`}>
-              <Input value={form.overrideNetPnl} onChange={(e) => set("overrideNetPnl", e.target.value)} />
-            </Field>
-          ) : null}
+          <details className="editorial-details">
+            <summary>Advanced calculation settings (usually not needed)</summary>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="ghost" loading={applyingSpecification} onClick={() => void applyInstrumentSpecification()}>Use saved {form.instrument} specification</Button>
+              <p className="max-w-2xl text-xs leading-5 text-[var(--muted)]">Replace the contract/tick/pip fields in this editor with the latest template. Review the calculator, then {tradeId ? "Update trade" : "Save trade"} to keep the result.{form.pnlOverridden ? " Choose Calculate automatically above if you want calculated net P&L." : ""}</p>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-5">
+              <Field label="Contract size"><Input inputMode="decimal" value={form.contractSize} onChange={(e) => set("contractSize", e.target.value)} /></Field>
+              <Field label="Tick size"><Input inputMode="decimal" value={form.tickSize} onChange={(e) => set("tickSize", e.target.value)} /></Field>
+              <Field label={`Tick value / lot (${currency})`}><Input inputMode="decimal" value={form.tickValue} onChange={(e) => set("tickValue", e.target.value)} /></Field>
+              <Field label="Pip size"><Input inputMode="decimal" value={form.pipSize} onChange={(e) => set("pipSize", e.target.value)} /></Field>
+              <Field label={`Pip value / lot (${currency})`}><Input inputMode="decimal" value={form.pipValue} onChange={(e) => set("pipValue", e.target.value)} /></Field>
+            </div>
+          </details>
         </section>
 
         <aside className="card h-fit space-y-3 p-5">
           <div className="card-heading"><h2>Calculator</h2><span>Live preview</span></div>
-          <p className="text-xs text-[var(--muted)]">{executionPreview.ledger ? "Reconciled from your fills and contract specification." : "Uses your contract spec. Override if the broker result differs."}</p>
-          <p className="text-xs leading-5 text-[var(--muted)]">{calculationBasis}</p>
-          {calculationTrace ? <p className="font-mono-num text-xs leading-5 text-[var(--muted)]">Breakdown: {calculationTrace}</p> : null}
-          {quoteCurrency && quoteCurrency !== currency.toUpperCase() ? (
+          <p className="text-xs leading-5 text-[var(--muted)]">{form.pnlOverridden ? "Using the final net result you entered from your broker." : executionPreview.ledger ? "Reconciled automatically from your fills and saved calculation settings." : "Calculated automatically from your prices, size, and saved calculation settings."}</p>
+          {!form.pnlOverridden ? (
+            <>
+              {calculationTrace ? (
+                <div className="card-quiet p-3">
+                  <p className="eyebrow">Simple breakdown</p>
+                  <p className="font-mono-num mt-1 text-xs leading-5">{calculationTrace}</p>
+                </div>
+              ) : !executionPreview.ledger ? <p className="text-xs leading-5 text-[var(--muted)]">Enter entry price, exit price, and size to see the calculation.</p> : null}
+              <details className="editorial-details">
+                <summary>Technical calculation details</summary>
+                <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{calculationBasis}</p>
+              </details>
+            </>
+          ) : null}
+          {!form.pnlOverridden && quoteCurrency && quoteCurrency !== currency.toUpperCase() ? (
             <Banner>
-              The current {form.instrument} template is quoted in {quoteCurrency}, while {selectedAccount?.name || "this account"} uses {currency}. No automatic {quoteCurrency} → {currency} trade-P&amp;L conversion is applied. Use pip/tick values already denominated in {currency}, or reconcile the broker result with a manual net override. Reporting FX rates do not rewrite this native calculation.
+              The current {form.instrument} template is quoted in {quoteCurrency}, while {selectedAccount?.name || "this account"} uses {currency}. No automatic {quoteCurrency} → {currency} trade-P&amp;L conversion is applied. Use pip/tick values already denominated in {currency}, or choose Use broker P&amp;L. Reporting FX rates do not rewrite this native calculation.
             </Banner>
           ) : null}
-          {form.pnlOverridden ? <p className="text-xs leading-5 text-[var(--muted)]">Manual net changes net P&amp;L and result only; gross P&amp;L and initial risk still use the calculation basis above.</p> : null}
+          {form.pnlOverridden ? <Banner tone="good">No pip, tick, or currency conversion is applied to your broker net. Calculated gross P&amp;L and initial risk still use the saved specification.</Banner> : null}
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Gross</p><p className="font-mono-num">{formatMoney(metrics.grossPnl, currency)}</p></div>
-            <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Net</p><p className="font-mono-num">{formatMoney(metrics.netPnl, currency)}</p></div>
+            <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">{form.pnlOverridden ? "Calculated gross" : "Gross"}</p><p className="font-mono-num">{formatMoney(metrics.grossPnl, currency)}</p></div>
+            <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">{form.pnlOverridden ? "Broker net" : "Net"}</p><p className="font-mono-num">{formatMoney(metrics.netPnl, currency)}</p></div>
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Initial risk</p><p className="font-mono-num">{formatMoney(metrics.initialRisk, currency)}</p></div>
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Planned R:R</p><p className="font-mono-num">{metrics.plannedRr ?? "—"}</p></div>
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Realized R</p><p className="font-mono-num">{formatR(metrics.rMultiple)}</p></div>

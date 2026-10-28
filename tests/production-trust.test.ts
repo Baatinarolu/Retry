@@ -102,6 +102,16 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   assert.match(form, /calculationTrace/);
   assert.match(form, /Use saved \{form.instrument\} specification/);
   assert.match(form, /apiJson<\{ instruments\?: Instrument\[\] \}>\("\/api\/instruments"\)/);
+  assert.match(form, /How should we record P&amp;L\?/);
+  assert.match(form, /Calculate automatically/);
+  assert.match(form, /Use broker P&amp;L/);
+  assert.match(form, /Final net P&L from broker/);
+  assert.match(form, /specificationMatchesTemplate/);
+  assert.match(form, /tradeId \|\| hasDraft \|\| !specificationUntouched/);
+  assert.match(form, /Enter the lot size or contract quantity exactly as shown by your broker/);
+  assert.match(form, /positionSize: ""/);
+  assert.match(form, /lotSize: ""/);
+  assert.doesNotMatch(form, /positionSize: "0\.5"/);
 });
 
 test("basic workspace options stay independent of risk profiles and FX-converted statistics", () => {
