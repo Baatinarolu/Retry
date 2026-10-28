@@ -68,6 +68,15 @@ test("missing historical rates and inconsistent reciprocal quotes fail closed", 
   );
 });
 
+test("starting-balance FX errors identify the account and report-time conversion", () => {
+  assert.throws(
+    () => convertStartingBalancesToCurrency([
+      { name: "Primary account", currency: "USD", startingBalance: "100" },
+    ], "NGN", "2026-10-28T12:10:20.706Z", []),
+    /Primary account starting balance \(report time\): Missing FX rate for USD → NGN/,
+  );
+});
+
 test("FX rate normalization validates direction, positivity, precision, and metadata", () => {
   const normalized = normalizeFxRate({
     fromCurrency: "usd",

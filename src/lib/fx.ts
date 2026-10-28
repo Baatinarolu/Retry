@@ -131,7 +131,7 @@ export function convertStartingBalancesToCurrency(
     try {
       return total.plus(convertCurrency(account.startingBalance, account.currency, target, asOf, rates));
     } catch (cause) {
-      throw new Error(`${account.name}: ${cause instanceof Error ? cause.message : "FX conversion failed"}`);
+      throw new Error(`${account.name} starting balance (report time): ${cause instanceof Error ? cause.message : "FX conversion failed"}`);
     }
   }, new Decimal(0)).toFixed(2);
 }

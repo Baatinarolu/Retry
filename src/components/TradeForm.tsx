@@ -28,6 +28,7 @@ type Instrument = {
   tickValue: string;
   pipSize: string;
   pipValue: string;
+  quoteCurrency: string;
 };
 
 export type TradeFormValues = Record<string, unknown>;
@@ -143,7 +144,17 @@ export function TradeForm({
     if (onScreenshotsChanged) onScreenshotsChanged(update);
     else setLocalShots(update);
   };
-  const currency = accounts.find((a) => a.id === form.accountId)?.currency || "USD";
+  const selectedAccount = accounts.find((account) => account.id === form.accountId);
+  const currency = selectedAccount?.currency || "USD";
+  const selectedInstrument = instruments.find((instrument) => instrument.symbol === form.instrument);
+  const quoteCurrency = selectedInstrument?.quoteCurrency?.toUpperCase();
+  const calculationBasis = Number(form.tickSize) > 0 && Number(form.tickValue) > 0
+    ? `Tick method: (directional price move ÷ ${form.tickSize}) × ${form.tickValue} ${currency} × quantity.`
+    : Number(form.pipSize) > 0 && Number(form.pipValue) > 0
+      ? `Pip method: (directional price move ÷ ${form.pipSize}) × ${form.pipValue} ${currency} × quantity.`
+      : Number(form.contractSize) > 0
+        ? `Contract method: directional price move × ${form.contractSize} × quantity; the result is treated as ${currency}.`
+        : `Quantity-only method: directional price move × quantity; the result is treated as ${currency}.`;
 
   const restoreDraft = useCallback(() => {
     const draft = localStorage.getItem(draftKey);
@@ -610,17 +621,17 @@ export function TradeForm({
             <div className="mt-3 grid gap-3 md:grid-cols-5">
               <Field label="Contract size"><Input value={form.contractSize} onChange={(e) => set("contractSize", e.target.value)} /></Field>
               <Field label="Tick size"><Input value={form.tickSize} onChange={(e) => set("tickSize", e.target.value)} /></Field>
-              <Field label="Tick value"><Input value={form.tickValue} onChange={(e) => set("tickValue", e.target.value)} /></Field>
+              <Field label={`Tick value / lot (${currency})`}><Input value={form.tickValue} onChange={(e) => set("tickValue", e.target.value)} /></Field>
               <Field label="Pip size"><Input value={form.pipSize} onChange={(e) => set("pipSize", e.target.value)} /></Field>
-              <Field label="Pip value"><Input value={form.pipValue} onChange={(e) => set("pipValue", e.target.value)} /></Field>
+              <Field label={`Pip value / lot (${currency})`}><Input value={form.pipValue} onChange={(e) => set("pipValue", e.target.value)} /></Field>
             </div>
           </details>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.pnlOverridden} onChange={(e) => set("pnlOverridden", e.target.checked)} />
-            Override net P&amp;L
+            Override net P&amp;L (broker reconciliation)
           </label>
           {form.pnlOverridden ? (
-            <Field label="Manual net P&L">
+            <Field label={`Manual net P&L (${currency})`}>
               <Input value={form.overrideNetPnl} onChange={(e) => set("overrideNetPnl", e.target.value)} />
             </Field>
           ) : null}
@@ -629,6 +640,13 @@ export function TradeForm({
         <aside className="card h-fit space-y-3 p-5">
           <div className="card-heading"><h2>Calculator</h2><span>Live preview</span></div>
           <p className="text-xs text-[var(--muted)]">{executionPreview.ledger ? "Reconciled from your fills and contract specification." : "Uses your contract spec. Override if the broker result differs."}</p>
+          <p className="text-xs leading-5 text-[var(--muted)]">{calculationBasis}</p>
+          {quoteCurrency && quoteCurrency !== currency.toUpperCase() ? (
+            <Banner>
+              The current {form.instrument} template is quoted in {quoteCurrency}, while {selectedAccount?.name || "this account"} uses {currency}. No automatic {quoteCurrency} → {currency} trade-P&amp;L conversion is applied. Use pip/tick values already denominated in {currency}, or reconcile the broker result with a manual net override. Reporting FX rates do not rewrite this native calculation.
+            </Banner>
+          ) : null}
+          {form.pnlOverridden ? <p className="text-xs leading-5 text-[var(--muted)]">Manual net changes net P&amp;L and result only; gross P&amp;L and initial risk still use the calculation basis above.</p> : null}
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Gross</p><p className="font-mono-num">{formatMoney(metrics.grossPnl, currency)}</p></div>
             <div className="card-quiet p-3"><p className="text-xs text-[var(--muted)]">Net</p><p className="font-mono-num">{formatMoney(metrics.netPnl, currency)}</p></div>

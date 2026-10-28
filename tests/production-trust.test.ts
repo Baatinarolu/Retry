@@ -79,6 +79,19 @@ test("journal workflow keeps bulk review owned, atomic, and non-destructive to n
   assert.match(page, /<BulkReviewBar/);
 });
 
+test("currency inputs distinguish native trade math from reporting conversion", () => {
+  const fxPanel = readFileSync("src/components/FxRatesPanel.tsx", "utf8");
+  assert.match(fxPanel, /Rate \(target per 1 source\)/);
+  assert.match(fxPanel, /starting balances use the latest rate effective at the report time/);
+  assert.doesNotMatch(fxPanel, /placeholder="0\.000666667"/);
+  const settings = readFileSync("src/app/(app)/settings/page.tsx", "utf8");
+  assert.match(settings, /Pip value \(account currency \/ lot\)/);
+  assert.match(settings, /Quote currency/);
+  const form = readFileSync("src/components/TradeForm.tsx", "utf8");
+  assert.match(form, /No automatic \{quoteCurrency\} → \{currency\} trade-P&amp;L conversion/);
+  assert.match(form, /calculationBasis/);
+});
+
 test("rate-limit policy preserves exact boundaries and Retry-After values", () => {
   const now = new Date("2026-10-25T12:00:00.000Z");
   const resetAt = new Date(now.getTime() + 30_000);

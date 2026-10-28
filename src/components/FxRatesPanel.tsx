@@ -98,18 +98,21 @@ export function FxRatesPanel() {
         <span>{rates.length} rates</span>
       </div>
       <p className="text-sm leading-6 text-[var(--muted)]">
-        Add dated rates for mixed-account reports. Convention: 1 unit of source = rate units of target. Reports use the latest rate effective on or before each trade’s realization; reciprocal quotes are accepted only when consistent. No live FX feed is used.
+        Add dated rates for mixed-account reports. Convention: 1 unit of source = rate units of target. Trades use the latest rate effective on or before each realization; starting balances use the latest rate effective at the report time. Reciprocal quotes are accepted only when consistent. No live FX feed is used, and these reporting rates never rewrite native trade P&L.
       </p>
       {error ? <Banner tone="warn">{error}</Banner> : null}
       <form className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" onSubmit={save}>
         <Field label="From currency"><Input value={form.fromCurrency} onChange={(event) => set("fromCurrency", event.target.value.toUpperCase())} maxLength={8} required /></Field>
         <Field label="To currency"><Input value={form.toCurrency} onChange={(event) => set("toCurrency", event.target.value.toUpperCase())} maxLength={8} required /></Field>
-        <Field label="Rate"><Input value={form.rate} onChange={(event) => set("rate", event.target.value)} inputMode="decimal" placeholder="0.000666667" required /></Field>
-        <Field label="Effective at" hint="ISO timestamp with timezone"><Input value={form.effectiveAt} onChange={(event) => set("effectiveAt", event.target.value)} placeholder="2026-10-25T00:00:00Z" className="font-mono text-xs" required /></Field>
+        <Field label="Rate (target per 1 source)"><Input value={form.rate} onChange={(event) => set("rate", event.target.value)} inputMode="decimal" placeholder={form.fromCurrency === "USD" && form.toCurrency === "NGN" ? "1500" : "Target units"} required /></Field>
+        <Field label="Effective at" hint="ISO timestamp with timezone; must be on or before the conversion time you need"><Input value={form.effectiveAt} onChange={(event) => set("effectiveAt", event.target.value)} placeholder="2026-10-25T00:00:00Z" className="font-mono text-xs" required /></Field>
         <Field label="Source"><Input value={form.source} onChange={(event) => set("source", event.target.value)} maxLength={80} required /></Field>
         <Field label="Notes"><Input value={form.notes} onChange={(event) => set("notes", event.target.value)} maxLength={500} placeholder="Broker statement rate" /></Field>
         <div className="md:col-span-2 lg:col-span-3"><Button type="submit" loading={saving}>Add dated rate</Button></div>
       </form>
+      <p className="text-xs leading-5 text-[var(--muted)]">
+        Direction check: <strong>1 {form.fromCurrency || "source"} = {form.rate || "?"} {form.toCurrency || "target"}</strong>. For USD → NGN, a rate of 1500 means 1 USD = 1,500 NGN; enter the reciprocal only when the pair is reversed.
+      </p>
       {loading ? <Spinner label="Loading rate book" /> : (
         <div className="table-wrap">
           <table className="data">

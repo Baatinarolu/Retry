@@ -3,10 +3,22 @@
 import { CashFlowPanel } from "@/components/CashFlowPanel";
 import { FxRatesPanel } from "@/components/FxRatesPanel";
 import { Banner, Button, Card, Field, Input, Select } from "@/components/ui";
-import { CURRENCIES, TIMEZONES } from "@/lib/constants";
+import { CURRENCIES, MARKET_CATEGORIES, TIMEZONES } from "@/lib/constants";
 import { formatMoney } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
+const emptyInstrument = {
+  symbol: "",
+  name: "",
+  category: "forex",
+  pipSize: "0.0001",
+  pipValue: "10",
+  tickSize: "0",
+  tickValue: "0",
+  contractSize: "1",
+  quoteCurrency: "USD",
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -16,9 +28,11 @@ export default function SettingsPage() {
   const [tags, setTags] = useState<any[]>([]);
   const [newTag, setNewTag] = useState("");
   const [acc, setAcc] = useState({ name: "Funded account", broker: "", currency: "USD", startingBalance: "5000", accountType: "prop" });
-  const [inst, setInst] = useState({ symbol: "", name: "", category: "forex", pipSize: "0.0001", pipValue: "10", tickSize: "0", tickValue: "0", contractSize: "1", quoteCurrency: "USD" });
+  const [inst, setInst] = useState({ ...emptyInstrument });
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [instrumentError, setInstrumentError] = useState("");
+  const [instrumentBusy, setInstrumentBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
 
   function reload() {
@@ -36,6 +50,29 @@ export default function SettingsPage() {
     window.localStorage.setItem("tm-theme", theme);
     window.dispatchEvent(new CustomEvent("tm-theme-change", { detail: theme }));
     setMsg("Preferences saved.");
+  }
+
+  async function addInstrument() {
+    if (instrumentBusy) return;
+    setInstrumentBusy(true);
+    setInstrumentError("");
+    setMsg("");
+    try {
+      const response = await fetch("/api/instruments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inst),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Could not save instrument");
+      setInst({ ...emptyInstrument });
+      setMsg(`${data.instrument.symbol} instrument saved. Existing trades retain their saved calculation specifications.`);
+      reload();
+    } catch (cause) {
+      setInstrumentError(cause instanceof Error ? cause.message : "Could not save instrument");
+    } finally {
+      setInstrumentBusy(false);
+    }
   }
 
   async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
@@ -94,7 +131,7 @@ export default function SettingsPage() {
             <option value="light">Light</option>
           </Select>
         </Field>
-        <Field label="Base currency">
+        <Field label="Base currency" hint="Reporting only. This does not change an account’s native currency or convert stored trade P&L.">
           <Select value={user.baseCurrency} onChange={(e) => setUser({ ...user, baseCurrency: e.target.value })}>
             {CURRENCIES.map((z) => <option key={z}>{z}</option>)}
           </Select>
@@ -108,6 +145,7 @@ export default function SettingsPage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Accounts</h2>
+        <p className="text-sm leading-6 text-[var(--muted)]">Each account’s currency must match its broker statement. All-account reports convert native starting balances and closed-trade money into the workspace base only through your dated FX rate book.</p>
         <ul className="text-sm">
           {accounts.map((a) => (
             <li key={a.id} className="flex justify-between border-b border-[var(--border)] py-2">
@@ -129,31 +167,45 @@ export default function SettingsPage() {
 
       <FxRatesPanel />
 
-      <Card className="space-y-3">
-        <h2 className="font-semibold">Instrument specifications</h2>
-        <p className="text-sm text-[var(--muted)]">Pip/tick values are per 1.0 lot unless you document otherwise. Gold, indices, and crypto are not forex lots.</p>
+      <Card className="space-y-4">
+        <div>
+          <h2 className="font-semibold">Instrument specifications</h2>
+          <p className="mt-2 max-w-5xl text-sm leading-6 text-[var(--muted)]">
+            Pip/tick values are per 1.0 lot and must already be denominated in the trading account’s currency. For AUDCHF in an NGN account, enter NGN per pip/tick—not generic USD 10 or CHF 10. Gold, indices, and crypto are not forex lots. Existing trades retain their saved specifications; edit an existing trade separately to reconcile it.
+          </p>
+        </div>
+        {instrumentError ? <Banner tone="warn">{instrumentError}</Banner> : null}
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>Symbol</th><th>Category</th><th>Pip size</th><th>Pip value</th><th></th></tr></thead>
+            <thead><tr><th>Symbol</th><th>Category</th><th>Contract</th><th>Tick size / value</th><th>Pip size / value</th><th>Quote</th><th></th></tr></thead>
             <tbody>
               {instruments.map((i) => (
                 <tr key={i.id}>
                   <td>{i.symbol}</td>
-                  <td>{i.category}</td>
-                  <td>{i.pipSize}</td>
-                  <td>{i.pipValue}</td>
+                  <td className="capitalize">{i.category}</td>
+                  <td className="font-mono-num">{i.contractSize}</td>
+                  <td className="font-mono-num">{i.tickSize} / {i.tickValue}</td>
+                  <td className="font-mono-num">{i.pipSize} / {i.pipValue}</td>
+                  <td>{i.quoteCurrency}</td>
                   <td><button className="text-[var(--red)]" onClick={async () => { await fetch(`/api/instruments?id=${i.id}`, { method: "DELETE" }); reload(); }}>Remove</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="grid gap-2 md:grid-cols-4">
-          <Input placeholder="Symbol" value={inst.symbol} onChange={(e) => setInst({ ...inst, symbol: e.target.value })} />
-          <Input placeholder="Name" value={inst.name} onChange={(e) => setInst({ ...inst, name: e.target.value })} />
-          <Input placeholder="Pip size" value={inst.pipSize} onChange={(e) => setInst({ ...inst, pipSize: e.target.value })} />
-          <Button onClick={async () => { await fetch("/api/instruments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(inst) }); reload(); }}>Add instrument</Button>
+        <div className="grid gap-3 border-t border-[var(--line)] pt-4 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Symbol"><Input value={inst.symbol} onChange={(e) => setInst({ ...inst, symbol: e.target.value.toUpperCase() })} placeholder="AUDCHF" required /></Field>
+          <Field label="Name"><Input value={inst.name} onChange={(e) => setInst({ ...inst, name: e.target.value })} placeholder="Australian Dollar / Swiss Franc" required /></Field>
+          <Field label="Market"><Select value={inst.category} onChange={(e) => setInst({ ...inst, category: e.target.value })}>{MARKET_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}</Select></Field>
+          <Field label="Quote currency" hint="The second currency in a forex pair"><Select value={inst.quoteCurrency} onChange={(e) => setInst({ ...inst, quoteCurrency: e.target.value })}>{CURRENCIES.map((currency) => <option key={currency}>{currency}</option>)}</Select></Field>
+          <Field label="Contract size"><Input value={inst.contractSize} onChange={(e) => setInst({ ...inst, contractSize: e.target.value })} inputMode="decimal" required /></Field>
+          <Field label="Tick size"><Input value={inst.tickSize} onChange={(e) => setInst({ ...inst, tickSize: e.target.value })} inputMode="decimal" required /></Field>
+          <Field label="Tick value (account currency / lot)"><Input value={inst.tickValue} onChange={(e) => setInst({ ...inst, tickValue: e.target.value })} inputMode="decimal" required /></Field>
+          <Field label="Pip size"><Input value={inst.pipSize} onChange={(e) => setInst({ ...inst, pipSize: e.target.value })} inputMode="decimal" required /></Field>
+          <Field label="Pip value (account currency / lot)"><Input value={inst.pipValue} onChange={(e) => setInst({ ...inst, pipValue: e.target.value })} inputMode="decimal" required /></Field>
         </div>
+        <p className="text-xs leading-5 text-[var(--muted)]">Calculation priority is tick value, then pip value, then contract size. Set unused methods to zero so the intended method is unambiguous.</p>
+        <Button onClick={addInstrument} loading={instrumentBusy}>Add instrument</Button>
       </Card>
 
       <Card className="space-y-3">
