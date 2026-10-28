@@ -101,6 +101,19 @@ test("currency inputs distinguish native trade math from reporting conversion", 
   assert.match(form, /calculationBasis/);
 });
 
+test("basic workspace options stay independent of risk profiles and FX-converted statistics", () => {
+  const bootstrap = readFileSync("src/app/api/bootstrap/route.ts", "utf8");
+  assert.doesNotMatch(bootstrap, /riskSettings/);
+  const strategies = readFileSync("src/app/api/strategies/route.ts", "utf8");
+  assert.match(strategies, /searchParams.get\("basic"\) === "1"/);
+  assert.ok(strategies.indexOf('searchParams.get("basic")') < strategies.indexOf("reportingContextFor(session!.uid"));
+  const workspace = readFileSync("src/components/useWorkspace.ts", "utf8");
+  assert.match(workspace, /\/api\/strategies\?basic=1/);
+  const form = readFileSync("src/components/TradeForm.tsx", "utf8");
+  assert.match(form, /apiJson<\{ strategies\?: Strategy\[\] \}>\("\/api\/strategies\?basic=1"\)/);
+  assert.match(form, /cause instanceof Error \? cause.message/);
+});
+
 test("rate-limit policy preserves exact boundaries and Retry-After values", () => {
   const now = new Date("2026-10-25T12:00:00.000Z");
   const resetAt = new Date(now.getTime() + 30_000);

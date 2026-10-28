@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { instruments, riskSettings, tradingAccounts, users } from "@/db/schema";
+import { instruments, tradingAccounts, users } from "@/db/schema";
 import { requireUser } from "@/lib/api";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -12,7 +12,6 @@ export async function GET() {
   const [user] = await db.select().from(users).where(eq(users.id, session!.uid));
   const accounts = await db.select().from(tradingAccounts).where(eq(tradingAccounts.userId, session!.uid));
   const instrumentsList = await db.select().from(instruments).where(eq(instruments.userId, session!.uid));
-  const risk = await db.select().from(riskSettings).where(eq(riskSettings.userId, session!.uid));
   return NextResponse.json({
     user: user
       ? {
@@ -30,6 +29,5 @@ export async function GET() {
       : null,
     accounts,
     instruments: instrumentsList,
-    risk,
   });
 }

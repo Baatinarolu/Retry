@@ -9,6 +9,7 @@ import {
   TRADE_TYPES,
 } from "@/lib/constants";
 import { computeTradeMetrics } from "@/lib/calculations";
+import { apiJson } from "@/lib/client-api";
 import { calculateExecutionLedger } from "@/lib/execution-ledger";
 import { formatMoney, formatR } from "@/lib/format";
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
@@ -172,16 +173,16 @@ export function TradeForm({
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/bootstrap").then((r) => r.json()),
-      fetch("/api/strategies").then((r) => r.json()),
-      fetch("/api/tags").then((r) => r.json()),
+      apiJson<{ accounts?: Account[]; instruments?: Instrument[] }>("/api/bootstrap"),
+      apiJson<{ strategies?: Strategy[] }>("/api/strategies?basic=1"),
+      apiJson<{ tags?: Tag[] }>("/api/tags"),
     ]).then(([boot, strat, tag]) => {
       setAccounts(boot.accounts || []);
       setInstruments(boot.instruments || []);
       setStrategies(strat.strategies || []);
       setTags(tag.tags || []);
       setForm((f) => ({ ...f, accountId: f.accountId || boot.accounts?.[0]?.id || "" }));
-    }).catch(() => setError("Could not load accounts and strategy data."));
+    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load accounts and strategy data."));
     if (tradeId) {
       fetch(`/api/trades/${tradeId}`)
         .then((r) => r.json())

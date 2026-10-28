@@ -9,11 +9,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { session, user, error } = await requireUser();
   if (error) return error;
   try {
     const list = await db.select().from(strategies).where(eq(strategies.userId, session!.uid));
+    if (new URL(req.url).searchParams.get("basic") === "1") {
+      return NextResponse.json({ strategies: list });
+    }
     const context = await reportingContextFor(session!.uid, null, { convertMixed: true });
     const rows = context.convertTrades(await loadTradeRows(session!.uid, {}, user!.timezone));
     const withStats = list.map((strategy) => {

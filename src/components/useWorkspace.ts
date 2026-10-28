@@ -27,7 +27,7 @@ export function useWorkspace() {
     const controller = new AbortController();
     Promise.all([
       apiJson<Bootstrap>("/api/bootstrap", { signal: controller.signal }),
-      apiJson<StrategyResponse>("/api/strategies", { signal: controller.signal }),
+      apiJson<StrategyResponse>("/api/strategies?basic=1", { signal: controller.signal }),
     ])
       .then(([boot, strat]) => {
         setAccounts(boot.accounts || []);
